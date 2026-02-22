@@ -34,6 +34,12 @@ static constexpr NO_t NO;
 // Time In Force
 enum class TimeInForce { GTC, IOC, FOK };
 
+// Pegged Pricing Models
+enum class ReferencePrice { Bid, Ask, Mid };
+constexpr ReferencePrice Bid = ReferencePrice::Bid;
+constexpr ReferencePrice Ask = ReferencePrice::Ask;
+constexpr ReferencePrice Mid = ReferencePrice::Mid;
+
 // The Order "State Machine"
 struct Order {
   MarketId market;
@@ -41,6 +47,9 @@ struct Order {
   bool is_buy;
   bool outcome_yes;
   double price;
+  bool is_pegged = false;
+  ReferencePrice pegged_ref = ReferencePrice::Mid;
+  double peg_offset = 0.0;
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
   int display_qty = 0; // 0 means not an iceberg
@@ -85,12 +94,6 @@ struct LimitPrice {
   constexpr explicit LimitPrice(double p) : price(p) {}
 };
 
-// Pegged Pricing Models
-enum class ReferencePrice { Bid, Ask, Mid };
-constexpr ReferencePrice Bid = ReferencePrice::Bid;
-constexpr ReferencePrice Ask = ReferencePrice::Ask;
-constexpr ReferencePrice Mid = ReferencePrice::Mid;
-
 struct Peg {
   ReferencePrice ref;
   double offset;
@@ -131,13 +134,24 @@ constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
 
 // OutcomeBoundOrder + LimitPrice -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
-  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, lp.price};
+  return Order{
+      o.market, o.quantity,          o.is_buy, o.outcome_yes,    lp.price,
+      false,    ReferencePrice::Mid, 0.0,      TimeInForce::GTC, false,
+      0};
 }
 
 // OutcomeBoundOrder + MarketPrice -> Order (Price = 0.0 or Inf conceptually, 0
 // for now)
 constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
-  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, 0.0};
+  return Order{o.market, o.quantity,          o.is_buy, o.outcome_yes,    0.0,
+               false,    ReferencePrice::Mid, 0.0,      TimeInForce::GTC, false,
+               0};
+}
+
+// OutcomeBoundOrder + Peg -> Order
+constexpr Order operator+(const OutcomeBoundOrder &o, Peg p) {
+  return Order{o.market, o.quantity, o.is_buy,         o.outcome_yes, 0.0, true,
+               p.ref,    p.offset,   TimeInForce::GTC, false,         0};
 }
 
 // TIF Modifiers via operator|

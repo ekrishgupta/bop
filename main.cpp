@@ -65,6 +65,24 @@ void my_strategy() {
             << "Action Execution: "
             << (conditional.order.is_buy ? "Buy " : "Sell ")
             << conditional.order.quantity << std::endl;
+  // Pegged Order
+  auto trade_pegged =
+      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -0.01) | GTC;
+  trade_pegged >> LiveExchange;
+
+  std::cout << "\nOrder 3 generated explicitly on stack.\n"
+            << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
+            << "Quantity: " << trade_pegged.quantity << "\n"
+            << "Market Hash: " << trade_pegged.market.hash << "\n"
+            << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
+            << "Pegged Reference: "
+            << (trade_pegged.pegged_ref == ReferencePrice::Bid
+                    ? "Bid"
+                    : (trade_pegged.pegged_ref == ReferencePrice::Ask ? "Ask"
+                                                                      : "Mid"))
+            << "\n"
+            << "Pegged Offset: " << trade_pegged.peg_offset << "\n"
+            << "TIF: " << tif_to_string(trade_pegged.tif) << std::endl;
 }
 
 int main() {
