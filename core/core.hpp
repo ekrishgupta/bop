@@ -77,10 +77,8 @@ struct Order {
   };
 
   constexpr Order(MarketId m, int q, bool b, bool y, int64_t p)
-      : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p) {
-    algo_type = AlgoType::None;
-    peg = {ReferencePrice::Mid, 0};
-  }
+      : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p),
+        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}) {}
 };
 
 // Action Types

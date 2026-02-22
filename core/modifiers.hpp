@@ -17,6 +17,16 @@ static constexpr FOK_t FOK;
 struct PostOnly_t {};
 static constexpr PostOnly_t PostOnly;
 
+// Self-Trade Prevention Tags
+struct STP_t {
+  SelfTradePrevention mode;
+  constexpr explicit STP_t(SelfTradePrevention m) : mode(m) {}
+};
+static constexpr STP_t CancelNew{SelfTradePrevention::CancelNew};
+static constexpr STP_t CancelOld{SelfTradePrevention::CancelOld};
+static constexpr STP_t CancelBoth{SelfTradePrevention::CancelBoth};
+static constexpr STP_t STP{SelfTradePrevention::CancelNew};
+
 struct Iceberg {
   int display_qty;
   constexpr explicit Iceberg(int qty) : display_qty(qty) {
@@ -136,6 +146,16 @@ constexpr Order &operator|(Order &o, Account a) {
 }
 constexpr Order &&operator|(Order &&o, Account a) {
   o.account_hash = a.hash;
+  return std::move(o);
+}
+
+// STP Modifiers
+constexpr Order &operator|(Order &o, STP_t s) {
+  o.stp = s.mode;
+  return o;
+}
+constexpr Order &&operator|(Order &&o, STP_t s) {
+  o.stp = s.mode;
   return std::move(o);
 }
 
