@@ -42,6 +42,8 @@ struct Order {
   bool outcome_yes;
   double price;
   TimeInForce tif = TimeInForce::GTC;
+  bool post_only = false;
+  int display_qty = 0; // 0 means not an iceberg
 };
 
 // Action Types
@@ -91,6 +93,14 @@ static constexpr GTC_t GTC; // Good Til Cancelled
 struct FOK_t {};
 static constexpr FOK_t FOK; // Fill Or Kill
 
+// Algo Modifiers
+struct PostOnly_t {};
+static constexpr PostOnly_t PostOnly;
+struct Iceberg {
+  int display_qty;
+  constexpr explicit Iceberg(int qty) : display_qty(qty) {}
+};
+
 // Intermediate DSL structure: Outcome Bound
 struct OutcomeBoundOrder {
   int quantity;
@@ -129,6 +139,16 @@ constexpr Order operator|(Order o, GTC_t) {
 }
 constexpr Order operator|(Order o, FOK_t) {
   o.tif = TimeInForce::FOK;
+  return o;
+}
+
+// Algo Modifiers via operator|
+constexpr Order operator|(Order o, PostOnly_t) {
+  o.post_only = true;
+  return o;
+}
+constexpr Order operator|(Order o, Iceberg ib) {
+  o.display_qty = ib.display_qty;
   return o;
 }
 
