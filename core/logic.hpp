@@ -13,6 +13,10 @@ template <typename Tag> struct MarketQuery {
   bool outcome_yes;
 };
 
+// Forward declaration of composite conditions
+template <typename L, typename R> struct AndCondition;
+template <typename L, typename R> struct OrCondition;
+
 struct MarketTarget {
   MarketId market;
   constexpr MarketQuery<PriceTag> Price(YES_t) const { return {market, true}; }
@@ -33,7 +37,51 @@ template <typename Tag> struct Condition {
       : query(q), threshold(t), is_greater(g) {}
 };
 
-// Price Comparisons
+// Logical Operators for Conditions
+template <typename L, typename R>
+constexpr AndCondition<L, R> operator&&(const L &l, const R &r) {
+  return {l, r};
+}
+
+template <typename L, typename R>
+constexpr OrCondition<L, R> operator||(const L &l, const R &r) {
+  return {l, r};
+}
+
+// Composition structures
+template <typename L, typename R> struct AndCondition {
+  L left;
+  R right;
+};
+
+template <typename L, typename R> struct OrCondition {
+  L left;
+  R right;
+};
+
+template <typename T> struct ConditionalOrder {
+  T condition;
+  Order order;
+};
+
+template <typename T> struct WhenBinder {
+  T condition;
+};
+
+template <typename T> constexpr WhenBinder<T> When(T c) { return {c}; }
+
+template <typename T>
+constexpr ConditionalOrder<T> operator>>(WhenBinder<T> w, Order o) {
+  return {w.condition, o};
+}
+
+template <typename T>
+constexpr ConditionalOrder<T> operator>>(WhenBinder<T> w,
+                                         OutcomeBoundOrder oo) {
+  return {w.condition, {oo.market, oo.quantity, oo.is_buy, oo.outcome_yes, 0}};
+}
+
+// Price Comparisons (restored with double support for DSL ease)
 constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q,
                                         int64_t ticks) {
   return {q, ticks, true};
@@ -43,9 +91,12 @@ constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q,
   return {q, ticks, false};
 }
 
-// Delete logical errors to prevent rounding issues from floating point
-Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double t) = delete;
-Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double t) = delete;
+constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
+  return {q, static_cast<int64_t>(price * 100), true};
+}
+constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
+  return {q, static_cast<int64_t>(price * 100), false};
+}
 
 // Volume Comparisons
 constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
@@ -53,28 +104,6 @@ constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
 }
 constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), false};
-}
-
-// Delete logical errors
-Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, double t) = delete;
-Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, double t) = delete;
-
-template <typename Tag> struct ConditionalOrder {
-  Condition<Tag> condition;
-  Order order;
-};
-
-template <typename Tag> struct WhenBinder {
-  Condition<Tag> condition;
-};
-
-template <typename Tag> constexpr WhenBinder<Tag> When(Condition<Tag> c) {
-  return {c};
-}
-
-template <typename Tag>
-constexpr ConditionalOrder<Tag> operator>>(WhenBinder<Tag> w, Order o) {
-  return {w.condition, o};
 }
 
 struct OCOOrder {
@@ -90,3 +119,6 @@ constexpr OCOOrder operator||(const Order &o1, const Order &o2) {
 
 // Global helper for DSL entry
 constexpr bop::MarketTarget Market(bop::MarketId mkt) { return {mkt}; }
+constexpr bop::MarketTarget Market(const char *name) {
+  return {bop::MarketId(bop::fnv1a(name))};
+}
