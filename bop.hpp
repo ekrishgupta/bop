@@ -66,3 +66,19 @@ constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
 constexpr Order operator+(const OutcomeBoundOrder &o, double price) {
   return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, price};
 }
+
+// Execution Engine Mock for Dispatching
+struct ExecutionEngine {
+  // In a real system, might contain connection state or ring buffer index.
+};
+
+// Global instance for testing the syntax
+extern ExecutionEngine LiveExchange;
+
+// Final Dispatch: Order >> ExecutionEngine
+inline void operator>>(const Order &o, ExecutionEngine &) {
+  // In a real HFT system, this would write the order into a memory-mapped
+  // ring buffer or directly construct a packet for the exchange via NIC
+  // bypassing.
+  (void)o; // Prevent unused warning in mock
+}
