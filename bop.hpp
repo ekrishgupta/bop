@@ -174,6 +174,21 @@ struct Condition {
 constexpr Condition operator>(MarketQuery q, double t) { return {q, t, true}; }
 constexpr Condition operator<(MarketQuery q, double t) { return {q, t, false}; }
 
+struct ConditionalOrder {
+  Condition condition;
+  Order order;
+};
+
+struct WhenBinder {
+  Condition condition;
+};
+
+constexpr WhenBinder When(Condition c) { return {c}; }
+
+constexpr ConditionalOrder operator>>(WhenBinder w, Order o) {
+  return {w.condition, o};
+}
+
 // Execution Engine Mock for Dispatching
 struct ExecutionEngine {
   // In a real system, might contain connection state or ring buffer index.
@@ -188,4 +203,9 @@ inline void operator>>(const Order &o, ExecutionEngine &) {
   // ring buffer or directly construct a packet for the exchange via NIC
   // bypassing.
   (void)o; // Prevent unused warning in mock
+}
+
+// Final Dispatch: ConditionalOrder >> ExecutionEngine
+inline void operator>>(const ConditionalOrder &co, ExecutionEngine &) {
+  (void)co; // Register conditional trigger in real system
 }

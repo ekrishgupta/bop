@@ -50,6 +50,21 @@ void my_strategy() {
             << "PostOnly: " << (trade_market.post_only ? "true" : "false")
             << "\n"
             << "Iceberg Display Qty: " << trade_market.display_qty << std::endl;
+
+  // Advanced Conditional Order Chaining
+  auto conditional =
+      When(Market("FedRateCut"_mkt).Price(YES) > 0.60) >>
+      (Sell(100_shares) / "FedRateCut"_mkt / YES + MarketPrice());
+  conditional >> LiveExchange;
+
+  std::cout << "\nConditional Order Generated.\n"
+            << "Trigger Market Hash: "
+            << conditional.condition.query.market.hash << "\n"
+            << "Trigger Threshold: > " << conditional.condition.threshold
+            << "\n"
+            << "Action Execution: "
+            << (conditional.order.is_buy ? "Buy " : "Sell ")
+            << conditional.order.quantity << std::endl;
 }
 
 int main() {
