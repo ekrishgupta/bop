@@ -71,6 +71,14 @@ constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
   return MarketBoundOrder{s.quantity, false, market};
 }
 
+// Pricing Models
+struct MarketPrice {};
+
+struct LimitPrice {
+  double price;
+  constexpr explicit LimitPrice(double p) : price(p) {}
+};
+
 // Intermediate DSL structure: Outcome Bound
 struct OutcomeBoundOrder {
   int quantity;
