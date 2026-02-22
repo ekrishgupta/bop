@@ -83,6 +83,31 @@ void my_strategy() {
             << "\n"
             << "Pegged Offset: " << trade_pegged.peg_offset << "\n"
             << "TIF: " << tif_to_string(trade_pegged.tif) << std::endl;
+
+  // Execution Algorithms (TWAP/VWAP)
+  auto trade_twap =
+      Sell(5000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | TWAP(15_min);
+  auto trade_vwap =
+      Buy(10000_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.55) |
+      VWAP(0.10); // 10% participation
+  trade_twap >> LiveExchange;
+  trade_vwap >> LiveExchange;
+
+  std::cout << "\nOrder 4 generated explicitly on stack.\n"
+            << "Action: " << (trade_twap.is_buy ? "Buy " : "Sell ")
+            << trade_twap.quantity << "\n"
+            << "Market Hash: " << trade_twap.market.hash << "\n"
+            << "Is TWAP: " << (trade_twap.is_twap ? "true" : "false") << "\n"
+            << "TWAP Duration (sec): " << trade_twap.twap_duration.count()
+            << std::endl;
+
+  std::cout << "\nOrder 5 generated explicitly on stack.\n"
+            << "Action: " << (trade_vwap.is_buy ? "Buy " : "Sell ")
+            << trade_vwap.quantity << "\n"
+            << "Market Hash: " << trade_vwap.market.hash << "\n"
+            << "Is VWAP: " << (trade_vwap.is_vwap ? "true" : "false") << "\n"
+            << "VWAP Max Participation: " << trade_vwap.vwap_participation * 100
+            << "%" << std::endl;
 }
 
 int main() {
