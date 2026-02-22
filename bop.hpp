@@ -115,14 +115,14 @@ constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
 struct MarketPrice {};
 
 struct LimitPrice {
-  double price;
-  constexpr explicit LimitPrice(double p) : price(p) {}
+  int64_t price;
+  constexpr explicit LimitPrice(int64_t p) : price(p) {}
 };
 
 struct Peg {
   ReferencePrice ref;
-  double offset;
-  constexpr explicit Peg(ReferencePrice r, double o) : ref(r), offset(o) {}
+  int64_t offset;
+  constexpr explicit Peg(ReferencePrice r, int64_t o) : ref(r), offset(o) {}
 };
 
 // Time In Force (TIF) Tags
@@ -153,13 +153,13 @@ struct VWAP {
 
 // Bracket Order Legs
 struct TakeProfit {
-  double price;
-  constexpr explicit TakeProfit(double p) : price(p) {}
+  int64_t price;
+  constexpr explicit TakeProfit(int64_t p) : price(p) {}
 };
 
 struct StopLoss {
-  double price;
-  constexpr explicit StopLoss(double p) : price(p) {}
+  int64_t price;
+  constexpr explicit StopLoss(int64_t p) : price(p) {}
 };
 
 // Custom Literals for std::chrono
