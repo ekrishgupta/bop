@@ -107,8 +107,16 @@ constexpr MarketBoundOrder operator/(const Buy &b, MarketId market) {
   return MarketBoundOrder{b.quantity, true, market};
 }
 
+constexpr MarketBoundOrder operator/(const Buy &b, const char *market) {
+  return MarketBoundOrder{b.quantity, true, MarketId(fnv1a(market))};
+}
+
 constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
   return MarketBoundOrder{s.quantity, false, market};
+}
+
+constexpr MarketBoundOrder operator/(const Sell &s, const char *market) {
+  return MarketBoundOrder{s.quantity, false, MarketId(fnv1a(market))};
 }
 
 constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, YES_t) {
