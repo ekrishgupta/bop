@@ -1,5 +1,19 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
+// FNV-1a Constants
+constexpr uint32_t FNV_PRIME = 16777619u;
+constexpr uint32_t FNV_OFFSET_BASIS = 2166136261u;
+
+// Constexpr Compile-Time String Hashing (FNV-1a)
+constexpr uint32_t fnv1a(const char *str, uint32_t hash = FNV_OFFSET_BASIS) {
+  return *str == '\0'
+             ? hash
+             : fnv1a(str + 1, (hash ^ static_cast<uint32_t>(*str)) * FNV_PRIME);
+}
+
 // Outcome tags
 struct YES_t {};
 static constexpr YES_t YES;
