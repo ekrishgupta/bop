@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.hpp"
+#include "market_base.hpp"
 
 namespace bop {
 
@@ -22,6 +23,7 @@ struct RiskQuery {
 template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
+  const MarketBackend *backend = nullptr;
 };
 
 struct BalanceQuery {};
@@ -32,19 +34,31 @@ template <typename L, typename R> struct OrCondition;
 
 struct MarketTarget {
   MarketId market;
-  constexpr MarketQuery<PriceTag> Price(YES_t) const { return {market, true}; }
-  constexpr MarketQuery<PriceTag> Price(NO_t) const { return {market, false}; }
+  const MarketBackend *backend = nullptr;
+
+  constexpr MarketQuery<PriceTag> Price(YES_t) const {
+    return {market, true, backend};
+  }
+  constexpr MarketQuery<PriceTag> Price(NO_t) const {
+    return {market, false, backend};
+  }
   constexpr MarketQuery<VolumeTag> Volume(YES_t) const {
-    return {market, true};
+    return {market, true, backend};
   }
   constexpr MarketQuery<VolumeTag> Volume(NO_t) const {
-    return {market, false};
+    return {market, false, backend};
   }
 
   // Market Depth Queries
-  constexpr MarketQuery<DepthTag> Spread() const { return {market, true}; }
-  constexpr MarketQuery<DepthTag> BestBid() const { return {market, true}; }
-  constexpr MarketQuery<DepthTag> BestAsk() const { return {market, false}; }
+  constexpr MarketQuery<DepthTag> Spread() const {
+    return {market, true, backend};
+  }
+  constexpr MarketQuery<DepthTag> BestBid() const {
+    return {market, true, backend};
+  }
+  constexpr MarketQuery<DepthTag> BestAsk() const {
+    return {market, false, backend};
+  }
 };
 
 // Spread Logic
@@ -232,9 +246,18 @@ constexpr Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
 } // namespace bop
 
 // Global helper for DSL entry
-constexpr bop::MarketTarget Market(bop::MarketId mkt) { return {mkt}; }
+constexpr bop::MarketTarget Market(bop::MarketId mkt) { return {mkt, nullptr}; }
 constexpr bop::MarketTarget Market(const char *name) {
-  return {bop::MarketId(bop::fnv1a(name))};
+  return {bop::MarketId(bop::fnv1a(name)), nullptr};
+}
+
+constexpr bop::MarketTarget Market(bop::MarketId mkt,
+                                   const bop::MarketBackend &b) {
+  return {mkt, &b};
+}
+constexpr bop::MarketTarget Market(const char *name,
+                                   const bop::MarketBackend &b) {
+  return {bop::MarketId(bop::fnv1a(name)), &b};
 }
 
 constexpr bop::MarketQuery<bop::PositionTag> Position(bop::MarketId mkt) {
