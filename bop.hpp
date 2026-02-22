@@ -126,9 +126,9 @@ constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
 struct MarketPrice {};
 
 struct LimitPrice {
-  double price;
-  constexpr explicit LimitPrice(double p) : price(p) {
-    if (p < 0.0)
+  int64_t price;
+  constexpr explicit LimitPrice(int64_t p) : price(p) {
+    if (p < 0)
       throw std::invalid_argument("Limit price cannot be negative");
   }
 };
@@ -152,7 +152,10 @@ struct PostOnly_t {};
 static constexpr PostOnly_t PostOnly;
 struct Iceberg {
   int display_qty;
-  constexpr explicit Iceberg(int qty) : display_qty(qty) {}
+  constexpr explicit Iceberg(int qty) : display_qty(qty) {
+    if (qty <= 0)
+      throw std::invalid_argument("Iceberg display quantity must be positive");
+  }
 };
 
 struct TWAP {
@@ -162,18 +165,27 @@ struct TWAP {
 
 struct VWAP {
   double max_participation_rate;
-  constexpr explicit VWAP(double rate) : max_participation_rate(rate) {}
+  constexpr explicit VWAP(double rate) : max_participation_rate(rate) {
+    if (rate <= 0.0 || rate > 1.0)
+      throw std::invalid_argument("VWAP participation rate must be in (0, 1]");
+  }
 };
 
 // Bracket Order Legs
 struct TakeProfit {
   int64_t price;
-  constexpr explicit TakeProfit(int64_t p) : price(p) {}
+  constexpr explicit TakeProfit(int64_t p) : price(p) {
+    if (p < 0)
+      throw std::invalid_argument("Take profit price cannot be negative");
+  }
 };
 
 struct StopLoss {
   int64_t price;
-  constexpr explicit StopLoss(int64_t p) : price(p) {}
+  constexpr explicit StopLoss(int64_t p) : price(p) {
+    if (p < 0)
+      throw std::invalid_argument("Stop loss price cannot be negative");
+  }
 };
 
 // Custom Literals for std::chrono
@@ -250,23 +262,44 @@ constexpr Order &&operator|(Order &&o, FOK_t) {
 }
 
 // Algo Modifiers via operator|
-constexpr Order operator|(Order o, PostOnly_t) {
+constexpr Order &operator|(Order &o, PostOnly_t) {
   o.post_only = true;
   return o;
 }
-constexpr Order operator|(Order o, Iceberg ib) {
+constexpr Order &&operator|(Order &&o, PostOnly_t) {
+  o.post_only = true;
+  return std::move(o);
+}
+
+constexpr Order &operator|(Order &o, Iceberg ib) {
   o.display_qty = ib.display_qty;
   return o;
 }
-constexpr Order operator|(Order o, TWAP t) {
+constexpr Order &&operator|(Order &&o, Iceberg ib) {
+  o.display_qty = ib.display_qty;
+  return std::move(o);
+}
+
+constexpr Order &operator|(Order &o, TWAP t) {
   o.is_twap = true;
   o.twap_duration = t.duration;
   return o;
 }
-constexpr Order operator|(Order o, VWAP v) {
+constexpr Order &&operator|(Order &&o, TWAP t) {
+  o.is_twap = true;
+  o.twap_duration = t.duration;
+  return std::move(o);
+}
+
+constexpr Order &operator|(Order &o, VWAP v) {
   o.is_vwap = true;
   o.vwap_participation = v.max_participation_rate;
   return o;
+}
+constexpr Order &&operator|(Order &&o, VWAP v) {
+  o.is_vwap = true;
+  o.vwap_participation = v.max_participation_rate;
+  return std::move(o);
 }
 
 // Account Routing via operator|
