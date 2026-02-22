@@ -42,12 +42,10 @@ constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q,
                                         int64_t ticks) {
   return {q, ticks, false};
 }
-constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double t) {
-  return {q, static_cast<int64_t>(t * 10000.0), true};
-}
-constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double t) {
-  return {q, static_cast<int64_t>(t * 10000.0), false};
-}
+
+// Delete logical errors to prevent rounding issues from floating point
+Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double t) = delete;
+Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double t) = delete;
 
 // Volume Comparisons
 constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
