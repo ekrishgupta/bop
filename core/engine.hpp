@@ -29,8 +29,16 @@ inline void operator>>(const bop::Order &o, bop::ExecutionEngine &) {
 }
 
 inline void operator>>(std::initializer_list<bop::Order> batch,
-                       bop::ExecutionEngine &) {
-  (void)batch;
+                       bop::ExecutionEngine &engine) {
+  uint64_t now =
+      std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  std::cout << "[BATCH] Processing batch of " << batch.size() << " orders."
+            << std::endl;
+  for (const auto &o : batch) {
+    uint64_t latency = now - o.creation_timestamp_ns;
+    std::cout << "  -> [LATENCY] Order reached engine in " << latency << " ns."
+              << std::endl;
+  }
 }
 
 template <typename Tag>
