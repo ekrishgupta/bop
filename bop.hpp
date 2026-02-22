@@ -95,9 +95,15 @@ constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
   return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, false};
 }
 
-// OutcomeBoundOrder + Price -> Order
-constexpr Order operator+(const OutcomeBoundOrder &o, double price) {
-  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, price};
+// OutcomeBoundOrder + LimitPrice -> Order
+constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
+  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, lp.price};
+}
+
+// OutcomeBoundOrder + MarketPrice -> Order (Price = 0.0 or Inf conceptually, 0
+// for now)
+constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
+  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, 0.0};
 }
 
 // Execution Engine Mock for Dispatching
