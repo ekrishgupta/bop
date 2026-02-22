@@ -16,6 +16,21 @@ const char *tif_to_string(TimeInForce tif) {
   }
 }
 
+const char *stp_to_string(SelfTradePrevention stp) {
+  switch (stp) {
+  case SelfTradePrevention::None:
+    return "None";
+  case SelfTradePrevention::CancelNew:
+    return "CancelNew";
+  case SelfTradePrevention::CancelOld:
+    return "CancelOld";
+  case SelfTradePrevention::CancelBoth:
+    return "CancelBoth";
+  default:
+    return "UNKNOWN";
+  }
+}
+
 void my_strategy() {
   // This is the BOP Language in action
   auto trade_limit =
@@ -164,6 +179,22 @@ void my_strategy() {
               ? oco_order.order2.trail_amount
               : 0)
       << " ticks)" << std::endl;
+
+  // Self-Trade Prevention validation
+  auto trade_stp =
+      Buy(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(60_ticks) | STP;
+  auto trade_stp_custom =
+      Sell(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(60_ticks) |
+      CancelOld;
+  trade_stp >> LiveExchange;
+  trade_stp_custom >> LiveExchange;
+
+  std::cout << "\nOrder 8 (STP) generated explicitly on stack.\n"
+            << "Action: " << (trade_stp.is_buy ? "Buy " : "Sell ")
+            << trade_stp.quantity << " shares\n"
+            << "STP Mode (Default): " << stp_to_string(trade_stp.stp) << "\n"
+            << "STP Mode (Custom): " << stp_to_string(trade_stp_custom.stp)
+            << std::endl;
 
   // Atomic Order Batching
   std::cout << "\nAtomic Order Batching demonstration:\n";
