@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 
@@ -53,6 +54,12 @@ struct Order {
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
   int display_qty = 0; // 0 means not an iceberg
+
+  // VWAP/TWAP Fields
+  bool is_twap = false;
+  std::chrono::seconds twap_duration{0};
+  bool is_vwap = false;
+  double vwap_participation = 0.0;
 };
 
 // Action Types
@@ -116,6 +123,24 @@ struct Iceberg {
   constexpr explicit Iceberg(int qty) : display_qty(qty) {}
 };
 
+struct TWAP {
+  std::chrono::seconds duration;
+  constexpr explicit TWAP(std::chrono::seconds d) : duration(d) {}
+};
+
+struct VWAP {
+  double max_participation_rate;
+  constexpr explicit VWAP(double rate) : max_participation_rate(rate) {}
+};
+
+// Custom Literals for std::chrono
+constexpr std::chrono::seconds operator""_sec(unsigned long long int v) {
+  return std::chrono::seconds(v);
+}
+constexpr std::chrono::minutes operator""_min(unsigned long long int v) {
+  return std::chrono::minutes(v);
+}
+
 // Intermediate DSL structure: Outcome Bound
 struct OutcomeBoundOrder {
   int quantity;
@@ -175,6 +200,16 @@ constexpr Order operator|(Order o, PostOnly_t) {
 }
 constexpr Order operator|(Order o, Iceberg ib) {
   o.display_qty = ib.display_qty;
+  return o;
+}
+constexpr Order operator|(Order o, TWAP t) {
+  o.is_twap = true;
+  o.twap_duration = t.duration;
+  return o;
+}
+constexpr Order operator|(Order o, VWAP v) {
+  o.is_vwap = true;
+  o.vwap_participation = v.max_participation_rate;
   return o;
 }
 
