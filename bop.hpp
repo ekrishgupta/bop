@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 
 // FNV-1a Constants
 constexpr uint32_t FNV_PRIME = 16777619u;
@@ -83,12 +84,18 @@ struct Order {
 // Action Types
 struct Buy {
   int quantity;
-  constexpr explicit Buy(int q) : quantity(q) {}
+  constexpr explicit Buy(int q) : quantity(q) {
+    if (q <= 0)
+      throw std::invalid_argument("Buy quantity must be positive");
+  }
 };
 
 struct Sell {
   int quantity;
-  constexpr explicit Sell(int q) : quantity(q) {}
+  constexpr explicit Sell(int q) : quantity(q) {
+    if (q <= 0)
+      throw std::invalid_argument("Sell quantity must be positive");
+  }
 };
 
 // User-Defined Literals for quantities
@@ -119,8 +126,11 @@ constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
 struct MarketPrice {};
 
 struct LimitPrice {
-  int64_t price;
-  constexpr explicit LimitPrice(int64_t p) : price(p) {}
+  double price;
+  constexpr explicit LimitPrice(double p) : price(p) {
+    if (p < 0.0)
+      throw std::invalid_argument("Limit price cannot be negative");
+  }
 };
 
 struct Peg {
@@ -212,17 +222,31 @@ constexpr Order operator+(const OutcomeBoundOrder &o, Peg p) {
 }
 
 // TIF Modifiers via operator|
-constexpr Order operator|(Order o, IOC_t) {
+constexpr Order &operator|(Order &o, IOC_t) {
   o.tif = TimeInForce::IOC;
   return o;
 }
-constexpr Order operator|(Order o, GTC_t) {
+constexpr Order &&operator|(Order &&o, IOC_t) {
+  o.tif = TimeInForce::IOC;
+  return std::move(o);
+}
+
+constexpr Order &operator|(Order &o, GTC_t) {
   o.tif = TimeInForce::GTC;
   return o;
 }
-constexpr Order operator|(Order o, FOK_t) {
+constexpr Order &&operator|(Order &&o, GTC_t) {
+  o.tif = TimeInForce::GTC;
+  return std::move(o);
+}
+
+constexpr Order &operator|(Order &o, FOK_t) {
   o.tif = TimeInForce::FOK;
   return o;
+}
+constexpr Order &&operator|(Order &&o, FOK_t) {
+  o.tif = TimeInForce::FOK;
+  return std::move(o);
 }
 
 // Algo Modifiers via operator|
@@ -261,42 +285,67 @@ constexpr Order operator&(Order o, StopLoss sl) {
   return o;
 }
 
+// Query Tags for Type Safety
+struct PriceTag {};
+struct VolumeTag {};
+
 // Conditional Triggers
-struct MarketQuery {
+template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
 };
 
 struct MarketTarget {
   MarketId market;
-  constexpr MarketQuery Price(YES_t) const { return {market, true}; }
-  constexpr MarketQuery Price(NO_t) const { return {market, false}; }
+  constexpr MarketQuery<PriceTag> Price(YES_t) const { return {market, true}; }
+  constexpr MarketQuery<PriceTag> Price(NO_t) const { return {market, false}; }
+  constexpr MarketQuery<VolumeTag> Volume(YES_t) const {
+    return {market, true};
+  }
+  constexpr MarketQuery<VolumeTag> Volume(NO_t) const {
+    return {market, false};
+  }
 };
 constexpr MarketTarget Market(MarketId mkt) { return {mkt}; }
 
-struct Condition {
-  MarketQuery query;
+template <typename Tag> struct Condition {
+  MarketQuery<Tag> query;
   int64_t threshold;
   bool is_greater;
 };
 
-constexpr Condition operator>(MarketQuery q, int64_t t) { return {q, t, true}; }
-constexpr Condition operator<(MarketQuery q, int64_t t) {
-  return {q, t, false};
+// Price comparisons (assuming price is double in DSL, converted to int64_t
+// ticks internal)
+constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double t) {
+  return {q, static_cast<int64_t>(t * 10000.0), true}; // Example conversion
+}
+constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double t) {
+  return {q, static_cast<int64_t>(t * 10000.0), false};
 }
 
-struct ConditionalOrder {
-  Condition condition;
+// Volume comparisons (using int)
+constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
+  return {q, static_cast<int64_t>(t), true};
+}
+constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
+  return {q, static_cast<int64_t>(t), false};
+}
+
+template <typename Tag> struct ConditionalOrder {
+  Condition<Tag> condition;
   Order order;
 };
 
-struct WhenBinder {
-  Condition condition;
+template <typename Tag> struct WhenBinder {
+  Condition<Tag> condition;
 };
 
-constexpr WhenBinder When(Condition c) { return {c}; }
+template <typename Tag> constexpr WhenBinder<Tag> When(Condition<Tag> c) {
+  return {c};
+}
 
-constexpr ConditionalOrder operator>>(WhenBinder w, Order o) {
+template <typename Tag>
+constexpr ConditionalOrder<Tag> operator>>(WhenBinder<Tag> w, Order o) {
   return {w.condition, o};
 }
 
@@ -317,6 +366,7 @@ inline void operator>>(const Order &o, ExecutionEngine &) {
 }
 
 // Final Dispatch: ConditionalOrder >> ExecutionEngine
-inline void operator>>(const ConditionalOrder &co, ExecutionEngine &) {
+template <typename Tag>
+inline void operator>>(const ConditionalOrder<Tag> &co, ExecutionEngine &) {
   (void)co; // Register conditional trigger in real system
 }
