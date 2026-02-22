@@ -215,7 +215,24 @@ void my_strategy() {
             << "Action: Buy 100 BTC YES @ Market" << std::endl;
 }
 
+void risk_aware_strategy() {
+  std::cout << "\nRunning Risk-Aware Strategy...\n";
+  // The new Position() and Balance() keywords in action
+  if (Position("MarsLanding"_mkt) < 1000) {
+    auto order =
+        Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks);
+    order >> LiveExchange;
+    std::cout << "Risk-aware check passed: Position is below 1000. Order sent."
+              << std::endl;
+  }
+
+  if (Balance() > 5000) {
+    std::cout << "Risk-aware check passed: Balance is above 5000." << std::endl;
+  }
+}
+
 int main() {
   my_strategy();
+  risk_aware_strategy();
   return 0;
 }
