@@ -31,6 +31,9 @@ static constexpr YES_t YES;
 struct NO_t {};
 static constexpr NO_t NO;
 
+// Time In Force
+enum class TimeInForce { GTC, IOC, FOK };
+
 // The Order "State Machine"
 struct Order {
   MarketId market;
@@ -38,6 +41,7 @@ struct Order {
   bool is_buy;
   bool outcome_yes;
   double price;
+  TimeInForce tif = TimeInForce::GTC;
 };
 
 // Action Types
@@ -112,6 +116,20 @@ constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
 // for now)
 constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
   return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, 0.0};
+}
+
+// TIF Modifiers via operator|
+constexpr Order operator|(Order o, IOC_t) {
+  o.tif = TimeInForce::IOC;
+  return o;
+}
+constexpr Order operator|(Order o, GTC_t) {
+  o.tif = TimeInForce::GTC;
+  return o;
+}
+constexpr Order operator|(Order o, FOK_t) {
+  o.tif = TimeInForce::FOK;
+  return o;
 }
 
 // Execution Engine Mock for Dispatching

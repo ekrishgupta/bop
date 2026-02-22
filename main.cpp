@@ -3,11 +3,25 @@
 
 ExecutionEngine LiveExchange; // Global instance for testing
 
+const char *tif_to_string(TimeInForce tif) {
+  switch (tif) {
+  case TimeInForce::GTC:
+    return "GTC";
+  case TimeInForce::IOC:
+    return "IOC";
+  case TimeInForce::FOK:
+    return "FOK";
+  default:
+    return "UNKNOWN";
+  }
+}
+
 void my_strategy() {
   // This is the BOP Language in action
   auto trade_limit =
-      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.65);
-  auto trade_market = Sell(200_shares) / "FedRateCut"_mkt / NO + MarketPrice();
+      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.65) | IOC;
+  auto trade_market =
+      Sell(200_shares) / "FedRateCut"_mkt / NO + MarketPrice() | FOK;
 
   // Dispatch to the C++ engine
   trade_limit >> LiveExchange;
@@ -18,14 +32,16 @@ void my_strategy() {
             << "Quantity: " << trade_limit.quantity << "\n"
             << "Market Hash: " << trade_limit.market.hash << "\n"
             << "Outcome: " << (trade_limit.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: $" << trade_limit.price << std::endl;
+            << "Price: $" << trade_limit.price << "\n"
+            << "TIF: " << tif_to_string(trade_limit.tif) << std::endl;
 
   std::cout << "\nOrder 2 generated explicitly on stack.\n"
             << "Action: " << (trade_market.is_buy ? "Buy " : "Sell ") << "\n"
             << "Quantity: " << trade_market.quantity << "\n"
             << "Market Hash: " << trade_market.market.hash << "\n"
             << "Outcome: " << (trade_market.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: $" << trade_market.price << " (Market)" << std::endl;
+            << "Price: $" << trade_market.price << " (Market)\n"
+            << "TIF: " << tif_to_string(trade_market.tif) << std::endl;
 }
 
 int main() {
