@@ -19,9 +19,11 @@ const char *tif_to_string(TimeInForce tif) {
 void my_strategy() {
   // This is the BOP Language in action
   auto trade_limit =
-      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.65) | IOC;
+      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.65) | IOC |
+      PostOnly;
   auto trade_market =
-      Sell(200_shares) / "FedRateCut"_mkt / NO + MarketPrice() | FOK;
+      Sell(1000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | FOK |
+      Iceberg(100_shares);
 
   // Dispatch to the C++ engine
   trade_limit >> LiveExchange;
@@ -33,7 +35,10 @@ void my_strategy() {
             << "Market Hash: " << trade_limit.market.hash << "\n"
             << "Outcome: " << (trade_limit.outcome_yes ? "YES" : "NO") << "\n"
             << "Price: $" << trade_limit.price << "\n"
-            << "TIF: " << tif_to_string(trade_limit.tif) << std::endl;
+            << "TIF: " << tif_to_string(trade_limit.tif) << "\n"
+            << "PostOnly: " << (trade_limit.post_only ? "true" : "false")
+            << "\n"
+            << "Iceberg Display Qty: " << trade_limit.display_qty << std::endl;
 
   std::cout << "\nOrder 2 generated explicitly on stack.\n"
             << "Action: " << (trade_market.is_buy ? "Buy " : "Sell ") << "\n"
@@ -41,7 +46,10 @@ void my_strategy() {
             << "Market Hash: " << trade_market.market.hash << "\n"
             << "Outcome: " << (trade_market.outcome_yes ? "YES" : "NO") << "\n"
             << "Price: $" << trade_market.price << " (Market)\n"
-            << "TIF: " << tif_to_string(trade_market.tif) << std::endl;
+            << "TIF: " << tif_to_string(trade_market.tif) << "\n"
+            << "PostOnly: " << (trade_market.post_only ? "true" : "false")
+            << "\n"
+            << "Iceberg Display Qty: " << trade_market.display_qty << std::endl;
 }
 
 int main() {
