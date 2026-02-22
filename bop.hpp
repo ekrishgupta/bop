@@ -303,9 +303,13 @@ constexpr Order &&operator|(Order &&o, VWAP v) {
 }
 
 // Account Routing via operator|
-constexpr Order operator|(Order o, Account a) {
+constexpr Order &operator|(Order &o, Account a) {
   o.account_hash = a.hash;
   return o;
+}
+constexpr Order &&operator|(Order &&o, Account a) {
+  o.account_hash = a.hash;
+  return std::move(o);
 }
 
 // Bracket Legs via operator&
