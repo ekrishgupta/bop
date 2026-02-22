@@ -33,7 +33,7 @@ static constexpr NO_t NO;
 
 // The Order "State Machine"
 struct Order {
-  const char *market;
+  MarketId market;
   int quantity;
   bool is_buy;
   bool outcome_yes;
@@ -60,14 +60,14 @@ constexpr int operator"" _shares(unsigned long long int v) {
 struct MarketBoundOrder {
   int quantity;
   bool is_buy;
-  const char *market;
+  MarketId market;
 };
 
-constexpr MarketBoundOrder operator/(const Buy &b, const char *market) {
+constexpr MarketBoundOrder operator/(const Buy &b, MarketId market) {
   return MarketBoundOrder{b.quantity, true, market};
 }
 
-constexpr MarketBoundOrder operator/(const Sell &s, const char *market) {
+constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
   return MarketBoundOrder{s.quantity, false, market};
 }
 
@@ -75,7 +75,7 @@ constexpr MarketBoundOrder operator/(const Sell &s, const char *market) {
 struct OutcomeBoundOrder {
   int quantity;
   bool is_buy;
-  const char *market;
+  MarketId market;
   bool outcome_yes;
 };
 
