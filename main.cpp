@@ -71,21 +71,25 @@ void my_strategy() {
       "AlphaFund"_acc;
   trade_pegged >> LiveExchange;
 
-  std::cout << "\nOrder 3 generated explicitly on stack.\n"
-            << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
-            << "Quantity: " << trade_pegged.quantity << "\n"
-            << "Market Hash: " << trade_pegged.market.hash << "\n"
-            << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
-            << "Pegged Reference: "
-            << (trade_pegged.pegged_ref == ReferencePrice::Bid
-                    ? "Bid"
-                    : (trade_pegged.pegged_ref == ReferencePrice::Ask ? "Ask"
-                                                                      : "Mid"))
-            << "\n"
-            << "Pegged Offset: " << trade_pegged.peg_offset << "\n"
-            << "TIF: " << tif_to_string(trade_pegged.tif) << "\n"
-            << "Account Routing Hash: " << trade_pegged.account_hash
-            << std::endl;
+  std::cout
+      << "\nOrder 3 generated explicitly on stack.\n"
+      << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
+      << "Quantity: " << trade_pegged.quantity << "\n"
+      << "Market Hash: " << trade_pegged.market.hash << "\n"
+      << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
+      << "Pegged Reference: "
+      << (trade_pegged.algo_type == AlgoType::Peg
+              ? (trade_pegged.peg.ref == ReferencePrice::Bid
+                     ? "Bid"
+                     : (trade_pegged.peg.ref == ReferencePrice::Ask ? "Ask"
+                                                                    : "Mid"))
+              : "None")
+      << "\n"
+      << "Pegged Offset: "
+      << (trade_pegged.algo_type == AlgoType::Peg ? trade_pegged.peg.offset : 0)
+      << "\n"
+      << "TIF: " << tif_to_string(trade_pegged.tif) << "\n"
+      << "Account Routing Hash: " << trade_pegged.account_hash << std::endl;
 
   // Execution Algorithms (TWAP/VWAP)
   auto trade_twap =
@@ -100,16 +104,26 @@ void my_strategy() {
             << "Action: " << (trade_twap.is_buy ? "Buy " : "Sell ")
             << trade_twap.quantity << "\n"
             << "Market Hash: " << trade_twap.market.hash << "\n"
-            << "Is TWAP: " << (trade_twap.is_twap ? "true" : "false") << "\n"
-            << "TWAP Duration (sec): " << trade_twap.twap_duration.count()
+            << "Is TWAP: "
+            << (trade_twap.algo_type == AlgoType::TWAP ? "true" : "false")
+            << "\n"
+            << "TWAP Duration (sec): "
+            << (trade_twap.algo_type == AlgoType::TWAP
+                    ? trade_twap.twap_duration_sec
+                    : 0)
             << std::endl;
 
   std::cout << "\nOrder 5 generated explicitly on stack.\n"
             << "Action: " << (trade_vwap.is_buy ? "Buy " : "Sell ")
             << trade_vwap.quantity << "\n"
             << "Market Hash: " << trade_vwap.market.hash << "\n"
-            << "Is VWAP: " << (trade_vwap.is_vwap ? "true" : "false") << "\n"
-            << "VWAP Max Participation: " << trade_vwap.vwap_participation * 100
+            << "Is VWAP: "
+            << (trade_vwap.algo_type == AlgoType::VWAP ? "true" : "false")
+            << "\n"
+            << "VWAP Max Participation: "
+            << (trade_vwap.algo_type == AlgoType::VWAP
+                    ? trade_vwap.vwap_participation * 100
+                    : 0)
             << "%" << std::endl;
 
   // Bracket Order validation
@@ -144,9 +158,12 @@ void my_strategy() {
       << oco_order.order2.quantity << "\n"
       << "Leg 2 Price: " << oco_order.order2.price << " ticks\n"
       << "Leg 2 Trailing: "
-      << (oco_order.order2.is_trailing_stop ? "true" : "false")
-      << " (Amount: " << oco_order.order2.trail_amount << " ticks)"
-      << std::endl;
+      << (oco_order.order2.algo_type == AlgoType::Trailing ? "true" : "false")
+      << " (Amount: "
+      << (oco_order.order2.algo_type == AlgoType::Trailing
+              ? oco_order.order2.trail_amount
+              : 0)
+      << " ticks)" << std::endl;
 }
 
 int main() {

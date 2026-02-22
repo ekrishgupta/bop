@@ -31,23 +31,20 @@ struct TrailingStop {
 
 // OutcomeBoundOrder + LimitPrice -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
-  return Order{
-      o.market, o.quantity,          o.is_buy, o.outcome_yes,    lp.price,
-      false,    ReferencePrice::Mid, 0,        TimeInForce::GTC, false,
-      0};
+  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, lp.price};
 }
 
 // OutcomeBoundOrder + MarketPrice -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
-  return Order{o.market, o.quantity,          o.is_buy, o.outcome_yes,    0,
-               false,    ReferencePrice::Mid, 0,        TimeInForce::GTC, false,
-               0};
+  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, 0};
 }
 
 // OutcomeBoundOrder + Peg -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, Peg p) {
-  return Order{o.market, o.quantity, o.is_buy,         o.outcome_yes, 0, true,
-               p.ref,    p.offset,   TimeInForce::GTC, false,         0};
+  Order ord{o.market, o.quantity, o.is_buy, o.outcome_yes, 0};
+  ord.algo_type = AlgoType::Peg;
+  ord.peg = {p.ref, p.offset};
+  return ord;
 }
 
 } // namespace bop

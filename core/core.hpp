@@ -39,11 +39,16 @@ static constexpr NO_t NO;
 // Time In Force
 enum class TimeInForce { GTC, IOC, FOK };
 
+// Self-Trade Prevention Modes
+enum class SelfTradePrevention { None, CancelNew, CancelOld, CancelBoth };
+
 // Pegged Pricing Models
 enum class ReferencePrice { Bid, Ask, Mid };
 constexpr ReferencePrice Bid = ReferencePrice::Bid;
 constexpr ReferencePrice Ask = ReferencePrice::Ask;
 constexpr ReferencePrice Mid = ReferencePrice::Mid;
+
+enum class AlgoType : uint8_t { None, Peg, TWAP, VWAP, Trailing };
 
 // The Order "State Machine"
 struct Order {
@@ -51,24 +56,31 @@ struct Order {
   int quantity;
   bool is_buy;
   bool outcome_yes;
-  int64_t price;
-  bool is_pegged = false;
-  ReferencePrice pegged_ref = ReferencePrice::Mid;
-  int64_t peg_offset = 0;
+  int64_t price = 0;
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
   int display_qty = 0;
-
-  bool is_twap = false;
-  std::chrono::seconds twap_duration{0};
-  bool is_vwap = false;
-  double vwap_participation = 0.0;
-
   uint32_t account_hash = 0;
   int64_t tp_price = 0;
   int64_t sl_price = 0;
-  bool is_trailing_stop = false;
-  int64_t trail_amount = 0;
+  SelfTradePrevention stp = SelfTradePrevention::None;
+
+  AlgoType algo_type = AlgoType::None;
+  union {
+    struct {
+      ReferencePrice ref;
+      int64_t offset;
+    } peg;
+    int64_t twap_duration_sec;
+    double vwap_participation;
+    int64_t trail_amount;
+  };
+
+  constexpr Order(MarketId m, int q, bool b, bool y, int64_t p)
+      : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p) {
+    algo_type = AlgoType::None;
+    peg = {ReferencePrice::Mid, 0};
+  }
 };
 
 // Action Types

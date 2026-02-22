@@ -99,32 +99,32 @@ constexpr Order &&operator|(Order &&o, Iceberg ib) {
   return std::move(o);
 }
 constexpr Order &operator|(Order &o, TWAP t) {
-  o.is_twap = true;
-  o.twap_duration = t.duration;
+  o.algo_type = AlgoType::TWAP;
+  o.twap_duration_sec = t.duration.count();
   return o;
 }
 constexpr Order &&operator|(Order &&o, TWAP t) {
-  o.is_twap = true;
-  o.twap_duration = t.duration;
+  o.algo_type = AlgoType::TWAP;
+  o.twap_duration_sec = t.duration.count();
   return std::move(o);
 }
 constexpr Order &operator|(Order &o, VWAP v) {
-  o.is_vwap = true;
+  o.algo_type = AlgoType::VWAP;
   o.vwap_participation = v.max_participation_rate;
   return o;
 }
 constexpr Order &&operator|(Order &&o, VWAP v) {
-  o.is_vwap = true;
+  o.algo_type = AlgoType::VWAP;
   o.vwap_participation = v.max_participation_rate;
   return std::move(o);
 }
 constexpr Order &operator|(Order &o, TrailingStop ts) {
-  o.is_trailing_stop = true;
+  o.algo_type = AlgoType::Trailing;
   o.trail_amount = ts.trail_amount;
   return o;
 }
 constexpr Order &&operator|(Order &&o, TrailingStop ts) {
-  o.is_trailing_stop = true;
+  o.algo_type = AlgoType::Trailing;
   o.trail_amount = ts.trail_amount;
   return std::move(o);
 }
