@@ -45,6 +45,7 @@ struct MarketBackend {
     return {};
   }
   virtual std::string get_series_fee_changes() const { return "none"; }
+  virtual int64_t clob_get_server_time() const { return 0; }
 
   // --- Market Data (Live) ---
   virtual int64_t get_price(MarketId market, bool outcome_yes) const = 0;
@@ -57,6 +58,19 @@ struct MarketBackend {
   virtual std::vector<std::string> list_markets() const { return {}; }
   virtual std::vector<std::string> list_events() const { return {}; }
   virtual std::vector<std::string> list_series() const { return {}; }
+
+  // Polymarket Gamma & CLOB Specifics
+  virtual std::string gamma_get_event(const std::string &id) const {
+    return "";
+  }
+  virtual std::string gamma_get_market(const std::string &id) const {
+    return "";
+  }
+  virtual int64_t clob_get_midpoint(MarketId market) const { return 0; }
+  virtual int64_t clob_get_spread(MarketId market) const { return 0; }
+  virtual int64_t clob_get_last_trade_price(MarketId market) const { return 0; }
+  virtual double clob_get_fee_rate(MarketId market) const { return 0.0; }
+  virtual double clob_get_tick_size(MarketId market) const { return 0.0; }
 
   // --- Historical Data ---
   virtual std::string get_historical_cutoff() const { return ""; }
