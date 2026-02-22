@@ -85,6 +85,18 @@ struct LimitPrice {
   constexpr explicit LimitPrice(double p) : price(p) {}
 };
 
+// Pegged Pricing Models
+enum class ReferencePrice { Bid, Ask, Mid };
+constexpr ReferencePrice Bid = ReferencePrice::Bid;
+constexpr ReferencePrice Ask = ReferencePrice::Ask;
+constexpr ReferencePrice Mid = ReferencePrice::Mid;
+
+struct Peg {
+  ReferencePrice ref;
+  double offset;
+  constexpr explicit Peg(ReferencePrice r, double o) : ref(r), offset(o) {}
+};
+
 // Time In Force (TIF) Tags
 struct IOC_t {};
 static constexpr IOC_t IOC; // Immediate Or Cancel
