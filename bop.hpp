@@ -79,6 +79,10 @@ struct Order {
   // Bracket Orders (0 means not set)
   int64_t tp_price = 0;
   int64_t sl_price = 0;
+
+  // Trailing Stop
+  bool is_trailing_stop = false;
+  int64_t trail_amount = 0;
 };
 
 // Action Types
@@ -185,6 +189,14 @@ struct StopLoss {
   constexpr explicit StopLoss(int64_t p) : price(p) {
     if (p < 0)
       throw std::invalid_argument("Stop loss price cannot be negative");
+  }
+};
+
+struct TrailingStop {
+  int64_t trail_amount;
+  constexpr explicit TrailingStop(int64_t t) : trail_amount(t) {
+    if (t < 0)
+      throw std::invalid_argument("Trailing stop amount cannot be negative");
   }
 };
 
@@ -302,6 +314,17 @@ constexpr Order &&operator|(Order &&o, VWAP v) {
   return std::move(o);
 }
 
+constexpr Order &operator|(Order &o, TrailingStop ts) {
+  o.is_trailing_stop = true;
+  o.trail_amount = ts.trail_amount;
+  return o;
+}
+constexpr Order &&operator|(Order &&o, TrailingStop ts) {
+  o.is_trailing_stop = true;
+  o.trail_amount = ts.trail_amount;
+  return std::move(o);
+}
+
 // Account Routing via operator|
 constexpr Order &operator|(Order &o, Account a) {
   o.account_hash = a.hash;
@@ -313,13 +336,22 @@ constexpr Order &&operator|(Order &&o, Account a) {
 }
 
 // Bracket Legs via operator&
-constexpr Order operator&(Order o, TakeProfit tp) {
+constexpr Order &operator&(Order &o, TakeProfit tp) {
   o.tp_price = tp.price;
   return o;
 }
-constexpr Order operator&(Order o, StopLoss sl) {
+constexpr Order &&operator&(Order &&o, TakeProfit tp) {
+  o.tp_price = tp.price;
+  return std::move(o);
+}
+
+constexpr Order &operator&(Order &o, StopLoss sl) {
   o.sl_price = sl.price;
   return o;
+}
+constexpr Order &&operator&(Order &&o, StopLoss sl) {
+  o.sl_price = sl.price;
+  return std::move(o);
 }
 
 // Query Tags for Type Safety
@@ -349,18 +381,30 @@ template <typename Tag> struct Condition {
   MarketQuery<Tag> query;
   int64_t threshold;
   bool is_greater;
+
+  constexpr Condition(MarketQuery<Tag> q, int64_t t, bool g)
+      : query(q), threshold(t), is_greater(g) {}
 };
 
-// Price comparisons (assuming price is double in DSL, converted to int64_t
-// ticks internal)
+// Price comparisons
+// If using ticks directly (int64_t)
+constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q,
+                                        int64_t ticks) {
+  return {q, ticks, true};
+}
+constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q,
+                                        int64_t ticks) {
+  return {q, ticks, false};
+}
+// If using legacy double prices
 constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double t) {
-  return {q, static_cast<int64_t>(t * 10000.0), true}; // Example conversion
+  return {q, static_cast<int64_t>(t * 10000.0), true};
 }
 constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double t) {
   return {q, static_cast<int64_t>(t * 10000.0), false};
 }
 
-// Volume comparisons (using int)
+// Volume comparisons (using int shares)
 constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), true};
 }
@@ -386,6 +430,15 @@ constexpr ConditionalOrder<Tag> operator>>(WhenBinder<Tag> w, Order o) {
   return {w.condition, o};
 }
 
+struct OCOOrder {
+  Order order1;
+  Order order2;
+};
+
+constexpr OCOOrder operator||(const Order &o1, const Order &o2) {
+  return {o1, o2};
+}
+
 // Execution Engine Mock for Dispatching
 struct ExecutionEngine {
   // In a real system, might contain connection state or ring buffer index.
@@ -406,4 +459,9 @@ inline void operator>>(const Order &o, ExecutionEngine &) {
 template <typename Tag>
 inline void operator>>(const ConditionalOrder<Tag> &co, ExecutionEngine &) {
   (void)co; // Register conditional trigger in real system
+}
+
+// Final Dispatch: OCOOrder >> ExecutionEngine
+inline void operator>>(const OCOOrder &oco, ExecutionEngine &) {
+  (void)oco; // Register OCO in real system
 }

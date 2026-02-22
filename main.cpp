@@ -125,6 +125,28 @@ void my_strategy() {
             << "Limit Price: " << trade_bracket.price << " ticks\n"
             << "Take Profit: " << trade_bracket.tp_price << " ticks\n"
             << "Stop Loss: " << trade_bracket.sl_price << " ticks" << std::endl;
+
+  // OCO Order and Trailing Stop validation
+  auto take_profit =
+      Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks);
+  auto stop_loss =
+      Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
+      TrailingStop(5_ticks);
+  auto oco_order = take_profit || stop_loss;
+  oco_order >> LiveExchange;
+
+  std::cout
+      << "\nOrder 7 (OCO with Trailing Stop) generated explicitly on stack.\n"
+      << "Leg 1 Action: " << (oco_order.order1.is_buy ? "Buy " : "Sell ")
+      << oco_order.order1.quantity << "\n"
+      << "Leg 1 Price: " << oco_order.order1.price << " ticks\n"
+      << "Leg 2 Action: " << (oco_order.order2.is_buy ? "Buy " : "Sell ")
+      << oco_order.order2.quantity << "\n"
+      << "Leg 2 Price: " << oco_order.order2.price << " ticks\n"
+      << "Leg 2 Trailing: "
+      << (oco_order.order2.is_trailing_stop ? "true" : "false")
+      << " (Amount: " << oco_order.order2.trail_amount << " ticks)"
+      << std::endl;
 }
 
 int main() {
