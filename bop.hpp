@@ -273,12 +273,14 @@ constexpr MarketTarget Market(MarketId mkt) { return {mkt}; }
 
 struct Condition {
   MarketQuery query;
-  double threshold;
+  int64_t threshold;
   bool is_greater;
 };
 
-constexpr Condition operator>(MarketQuery q, double t) { return {q, t, true}; }
-constexpr Condition operator<(MarketQuery q, double t) { return {q, t, false}; }
+constexpr Condition operator>(MarketQuery q, int64_t t) { return {q, t, true}; }
+constexpr Condition operator<(MarketQuery q, int64_t t) {
+  return {q, t, false};
+}
 
 struct ConditionalOrder {
   Condition condition;
