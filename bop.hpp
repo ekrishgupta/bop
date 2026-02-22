@@ -58,10 +58,10 @@ struct Order {
   int quantity;
   bool is_buy;
   bool outcome_yes;
-  double price;
+  int64_t price;
   bool is_pegged = false;
   ReferencePrice pegged_ref = ReferencePrice::Mid;
-  double peg_offset = 0.0;
+  int64_t peg_offset = 0;
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
   int display_qty = 0; // 0 means not an iceberg
@@ -76,8 +76,8 @@ struct Order {
   uint32_t account_hash = 0; // 0 = Default Account
 
   // Bracket Orders (0 means not set)
-  double tp_price = 0.0;
-  double sl_price = 0.0;
+  int64_t tp_price = 0;
+  int64_t sl_price = 0;
 };
 
 // Action Types
