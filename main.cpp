@@ -224,8 +224,29 @@ void risk_aware_strategy() {
   risk_aware_order >> LiveExchange;
 }
 
+void pro_strategy() {
+  std::cout << "\nRunning Professional Strategy...\n";
+
+  // 1. Spread Trading
+  auto spread_trade = Buy(100_shares) / (Market("BTC") - Market("ETH")) / YES;
+  spread_trade >> LiveExchange;
+
+  std::cout << "Spread Order: Buy 100 BTC-ETH Spread YES" << std::endl;
+
+  // 2. Risk-Gated Execution with Market Depth
+  auto gated_order =
+      When(Exposure() < 50000 && Market("BTC").Spread() < 5_ticks) >>
+      (Buy(500_shares) / "BTC" / YES + MarketPrice());
+
+  gated_order >> LiveExchange;
+
+  std::cout << "Gated Order: Buy 500 BTC YES if Exposure < 50k and Spread < 5"
+            << std::endl;
+}
+
 int main() {
   my_strategy();
   risk_aware_strategy();
+  pro_strategy();
   return 0;
 }
