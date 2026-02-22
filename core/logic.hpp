@@ -11,6 +11,13 @@ struct PositionTag {};
 struct BalanceTag {};
 struct SpreadTag {};
 struct DepthTag {};
+struct ExposureTag {};
+struct PnLTag {};
+
+struct RiskQuery {
+  enum class Type { Exposure, PnL };
+  Type type;
+};
 
 template <typename Tag> struct MarketQuery {
   MarketId market;
@@ -81,7 +88,8 @@ template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
 
   // Context-aware evaluation (implemented in engine.hpp)
   bool eval() const;
-  operator bool() const { return eval(); }
+  // Removed operator bool() to avoid ambiguity in comparisons like Exposure() <
+  // 100
 };
 
 // Logical Operators for Conditions
@@ -100,14 +108,12 @@ template <typename L, typename R> struct AndCondition {
   L left;
   R right;
   bool eval() const { return left.eval() && right.eval(); }
-  operator bool() const { return eval(); }
 };
 
 template <typename L, typename R> struct OrCondition {
   L left;
   R right;
   bool eval() const { return left.eval() || right.eval(); }
-  operator bool() const { return eval(); }
 };
 
 template <typename T> struct ConditionalOrder {
@@ -236,6 +242,23 @@ constexpr bop::MarketQuery<bop::PositionTag> Position(bop::MarketId mkt) {
 }
 
 constexpr bop::BalanceQuery Balance() { return {}; }
+
+constexpr bop::Condition<bop::ExposureTag, bop::RiskQuery> Exposure() {
+  return {{bop::RiskQuery::Type::Exposure}, 0, false};
+}
+
+constexpr bop::Condition<bop::PnLTag, bop::RiskQuery> PnL() {
+  return {{bop::RiskQuery::Type::PnL}, 0, false};
+}
+
+// Exposure/PnL comparisons
+inline bop::Condition<bop::ExposureTag, bop::RiskQuery>
+operator<(bop::Condition<bop::ExposureTag, bop::RiskQuery> c,
+          long long threshold) {
+  c.threshold = threshold;
+  c.is_greater = false;
+  return c;
+}
 
 // Batch DSL Entry
 inline std::initializer_list<bop::Order>
