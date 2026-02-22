@@ -7,7 +7,10 @@
 
 namespace bop {
 
-struct ExecutionEngine {};
+struct ExecutionEngine {
+  virtual int64_t get_position(MarketId market) const { return 0; }
+  virtual int64_t get_balance() const { return 0; }
+};
 
 // Global instance for testing the syntax
 } // namespace bop
