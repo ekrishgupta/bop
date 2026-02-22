@@ -79,6 +79,14 @@ struct LimitPrice {
   constexpr explicit LimitPrice(double p) : price(p) {}
 };
 
+// Time In Force (TIF) Tags
+struct IOC_t {};
+static constexpr IOC_t IOC; // Immediate Or Cancel
+struct GTC_t {};
+static constexpr GTC_t GTC; // Good Til Cancelled
+struct FOK_t {};
+static constexpr FOK_t FOK; // Fill Or Kill
+
 // Intermediate DSL structure: Outcome Bound
 struct OutcomeBoundOrder {
   int quantity;
