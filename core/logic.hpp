@@ -114,6 +114,26 @@ constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), false};
 }
 
+// Position comparisons
+constexpr Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
+                                           int64_t shares) {
+  return {q, shares, true};
+}
+constexpr Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
+                                           int64_t shares) {
+  return {q, shares, false};
+}
+
+// Balance comparisons
+constexpr Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
+                                                        int64_t amount) {
+  return {q, amount, true};
+}
+constexpr Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
+                                                        int64_t amount) {
+  return {q, amount, false};
+}
+
 struct OCOOrder {
   Order order1;
   Order order2;
@@ -130,3 +150,9 @@ constexpr bop::MarketTarget Market(bop::MarketId mkt) { return {mkt}; }
 constexpr bop::MarketTarget Market(const char *name) {
   return {bop::MarketId(bop::fnv1a(name))};
 }
+
+constexpr bop::MarketQuery<bop::PositionTag> Position(bop::MarketId mkt) {
+  return {mkt, true};
+}
+
+constexpr bop::BalanceQuery Balance() { return {}; }
