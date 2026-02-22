@@ -1,4 +1,6 @@
 #include "bop.hpp"
+#include "markets/kalshi/kalshi.hpp"
+#include "markets/polymarket/polymarket.hpp"
 #include <iostream>
 
 ExecutionEngine LiveExchange; // Global instance for testing
@@ -244,9 +246,29 @@ void pro_strategy() {
             << std::endl;
 }
 
+void arbitrage_strategy() {
+  std::cout << "\nRunning Multi-Market Arbitrage Strategy...\n";
+
+  using namespace bop::markets;
+
+  // Cross-market price comparison
+  // Buy on Kalshi if it's cheaper than Polymarket
+  auto arb_logic =
+      When(Market("BTC", kalshi).Price(YES) <
+           Market("BTC", polymarket).Price(YES)) >>
+      (Buy(100_shares) / Market("BTC", kalshi) / YES + MarketPrice());
+
+  arb_logic >> LiveExchange;
+
+  std::cout << "Arb Check: Kalshi BTC (" << kalshi.get_price("BTC"_mkt, true)
+            << ") vs Polymarket BTC (" << polymarket.get_price("BTC"_mkt, true)
+            << ")" << std::endl;
+}
+
 int main() {
   my_strategy();
   risk_aware_strategy();
   pro_strategy();
+  arbitrage_strategy();
   return 0;
 }

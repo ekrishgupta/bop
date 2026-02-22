@@ -7,6 +7,8 @@
 
 namespace bop {
 
+struct MarketBackend; // Forward declaration
+
 // FNV-1a Constants
 constexpr uint32_t FNV_PRIME = 16777619u;
 constexpr uint32_t FNV_OFFSET_BASIS = 2166136261u;
@@ -65,6 +67,7 @@ struct Order {
   int64_t sl_price = 0;
   SelfTradePrevention stp = SelfTradePrevention::None;
   int64_t creation_timestamp_ns = 0;
+  const MarketBackend *backend = nullptr;
 
   AlgoType algo_type = AlgoType::None;
   union {
@@ -80,7 +83,7 @@ struct Order {
   Order(MarketId m, int q, bool b, bool y, int64_t p, int64_t ts)
       : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p),
         algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}),
-        creation_timestamp_ns(ts) {}
+        creation_timestamp_ns(ts), backend(nullptr) {}
 };
 
 // Action Types
@@ -112,6 +115,7 @@ struct MarketBoundOrder {
   bool is_buy;
   MarketId market;
   int64_t timestamp_ns;
+  const MarketBackend *backend = nullptr;
 };
 
 inline MarketBoundOrder operator/(const Buy &b, MarketId market) {
@@ -133,11 +137,15 @@ inline MarketBoundOrder operator/(const Sell &s, const char *market) {
 }
 
 inline Order operator/(const MarketBoundOrder &m, YES_t) {
-  return Order{m.market, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
+  Order o{m.market, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
+  o.backend = m.backend;
+  return o;
 }
 
 inline Order operator/(const MarketBoundOrder &m, NO_t) {
-  return Order{m.market, m.quantity, m.is_buy, false, 0, m.timestamp_ns};
+  Order o{m.market, m.quantity, m.is_buy, false, 0, m.timestamp_ns};
+  o.backend = m.backend;
+  return o;
 }
 
 } // namespace bop

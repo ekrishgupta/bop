@@ -16,6 +16,6 @@ struct Kalshi : public MarketBackend {
   }
 };
 
-static constexpr Kalshi kalshi;
+static const Kalshi kalshi;
 
 } // namespace bop::markets

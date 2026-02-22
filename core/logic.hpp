@@ -10,10 +10,10 @@ struct PriceTag {};
 struct VolumeTag {};
 struct PositionTag {};
 struct BalanceTag {};
-struct SpreadTag {};
-struct DepthTag {};
 struct ExposureTag {};
 struct PnLTag {};
+struct SpreadTag {};
+struct DepthTag {};
 
 struct RiskQuery {
   enum class Type { Exposure, PnL };
@@ -87,9 +87,8 @@ inline MarketBoundSpread operator/(const Sell &s, SpreadTarget spread) {
 }
 
 inline Order operator/(const MarketBoundSpread &m, YES_t) {
-  // Overload Order to support spread markets or handle it in engine
   Order o{m.spread.m1, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
-  o.algo_type = AlgoType::None; // Placeholder: Engine should detect spread
+  o.algo_type = AlgoType::None;
   return o;
 }
 
@@ -100,10 +99,15 @@ template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   constexpr Condition(Q q, int64_t t, bool g)
       : query(q), threshold(t), is_greater(g) {}
 
-  // Context-aware evaluation (implemented in engine.hpp)
   bool eval() const;
-  // Removed operator bool() to avoid ambiguity in comparisons like Exposure() <
-  // 100
+};
+
+template <typename Tag> struct RelativeCondition {
+  MarketQuery<Tag> left;
+  MarketQuery<Tag> right;
+  bool is_greater;
+
+  bool eval() const;
 };
 
 // Logical Operators for Conditions
@@ -148,10 +152,9 @@ template <typename T> constexpr WhenBinder<T> When(T c) { return {c}; }
 struct OCOOrder {
   Order order1;
   Order order2;
-  bool eval() const { return true; } // OCO legs are typically always valid
+  bool eval() const { return true; }
 };
 
-// DSL entry for OCO
 inline OCOOrder Either(Order &&o1, Order &&o2) {
   return {std::move(o1), std::move(o2)};
 }
@@ -164,14 +167,6 @@ inline OCOOrder operator||(const Order &o1, const Order &o2) {
   return {o1, o2};
 }
 
-inline OCOOrder operator||(Order &&o1, const Order &o2) {
-  return {std::move(o1), o2};
-}
-
-inline OCOOrder operator||(const Order &o1, Order &&o2) {
-  return {o1, std::move(o2)};
-}
-
 template <typename T>
 inline ConditionalOrder<T> operator>>(WhenBinder<T> w, Order &&o) {
   return {std::move(w.condition), std::move(o)};
@@ -182,13 +177,28 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
   return {std::move(w.condition), o};
 }
 
-template <typename T>
-inline ConditionalOrder<T> operator>>(WhenBinder<T> w, OCOOrder &&oco) {
-  return {std::move(w.condition),
-          Order(oco.order1)}; // Placeholder: simplified for demonstration
+inline MarketBoundOrder operator/(const Buy &b, MarketTarget target) {
+  return {b.quantity, true, target.market, b.timestamp_ns, target.backend};
 }
 
-// Price Comparisons (restored with double support for DSL ease)
+inline MarketBoundOrder operator/(const Sell &s, MarketTarget target) {
+  return {s.quantity, false, target.market, s.timestamp_ns, target.backend};
+}
+
+// Relative Comparisons
+template <typename Tag>
+constexpr RelativeCondition<Tag> operator<(MarketQuery<Tag> a,
+                                           MarketQuery<Tag> b) {
+  return {a, b, false};
+}
+
+template <typename Tag>
+constexpr RelativeCondition<Tag> operator>(MarketQuery<Tag> a,
+                                           MarketQuery<Tag> b) {
+  return {a, b, true};
+}
+
+// Price Comparisons
 constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q,
                                         int64_t ticks) {
   return {q, ticks, true};

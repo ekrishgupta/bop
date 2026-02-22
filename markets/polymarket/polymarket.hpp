@@ -16,6 +16,6 @@ struct Polymarket : public MarketBackend {
   }
 };
 
-static constexpr Polymarket polymarket;
+static const Polymarket polymarket;
 
 } // namespace bop::markets
