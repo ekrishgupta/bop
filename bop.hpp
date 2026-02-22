@@ -412,6 +412,10 @@ constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), false};
 }
 
+// Delete double comparisons for Volume to prevent logical errors
+Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, double t) = delete;
+Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, double t) = delete;
+
 template <typename Tag> struct ConditionalOrder {
   Condition<Tag> condition;
   Order order;
