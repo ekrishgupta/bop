@@ -19,7 +19,7 @@ const char *tif_to_string(TimeInForce tif) {
 void my_strategy() {
   // This is the BOP Language in action
   auto trade_limit =
-      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.65) | IOC |
+      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(65_ticks) | IOC |
       PostOnly;
   auto trade_market =
       Sell(1000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | FOK |
@@ -34,7 +34,7 @@ void my_strategy() {
             << "Quantity: " << trade_limit.quantity << "\n"
             << "Market Hash: " << trade_limit.market.hash << "\n"
             << "Outcome: " << (trade_limit.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: $" << trade_limit.price << "\n"
+            << "Price: " << trade_limit.price << " ticks\n"
             << "TIF: " << tif_to_string(trade_limit.tif) << "\n"
             << "PostOnly: " << (trade_limit.post_only ? "true" : "false")
             << "\n"
@@ -45,7 +45,7 @@ void my_strategy() {
             << "Quantity: " << trade_market.quantity << "\n"
             << "Market Hash: " << trade_market.market.hash << "\n"
             << "Outcome: " << (trade_market.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: $" << trade_market.price << " (Market)\n"
+            << "Price: " << trade_market.price << " (Market)\n"
             << "TIF: " << tif_to_string(trade_market.tif) << "\n"
             << "PostOnly: " << (trade_market.post_only ? "true" : "false")
             << "\n"
@@ -53,7 +53,7 @@ void my_strategy() {
 
   // Advanced Conditional Order Chaining
   auto conditional =
-      When(Market("FedRateCut"_mkt).Price(YES) > 0.60) >>
+      When(Market("FedRateCut"_mkt).Price(YES) > 60_ticks) >>
       (Sell(100_shares) / "FedRateCut"_mkt / YES + MarketPrice());
   conditional >> LiveExchange;
 
@@ -67,7 +67,7 @@ void my_strategy() {
             << conditional.order.quantity << std::endl;
   // Pegged Order with Account Routing
   auto trade_pegged =
-      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -0.01) | GTC |
+      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -1_ticks) | GTC |
       "AlphaFund"_acc;
   trade_pegged >> LiveExchange;
 
@@ -91,7 +91,7 @@ void my_strategy() {
   auto trade_twap =
       Sell(5000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | TWAP(15_min);
   auto trade_vwap =
-      Buy(10000_shares) / "FedRateCut"_mkt / YES + LimitPrice(0.55) |
+      Buy(10000_shares) / "FedRateCut"_mkt / YES + LimitPrice(55_ticks) |
       VWAP(0.10); // 10% participation
   trade_twap >> LiveExchange;
   trade_vwap >> LiveExchange;
@@ -114,17 +114,17 @@ void my_strategy() {
 
   // Bracket Order validation
   auto trade_bracket =
-      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(0.50)) &
-      TakeProfit(0.70) & StopLoss(0.40);
+      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks)) &
+      TakeProfit(70_ticks) & StopLoss(40_ticks);
   trade_bracket >> LiveExchange;
 
   std::cout << "\nOrder 6 (Bracket) generated explicitly on stack.\n"
             << "Action: " << (trade_bracket.is_buy ? "Buy " : "Sell ")
             << trade_bracket.quantity << "\n"
             << "Market Hash: " << trade_bracket.market.hash << "\n"
-            << "Limit Price: $" << trade_bracket.price << "\n"
-            << "Take Profit: $" << trade_bracket.tp_price << "\n"
-            << "Stop Loss: $" << trade_bracket.sl_price << std::endl;
+            << "Limit Price: " << trade_bracket.price << " ticks\n"
+            << "Take Profit: " << trade_bracket.tp_price << " ticks\n"
+            << "Stop Loss: " << trade_bracket.sl_price << " ticks" << std::endl;
 }
 
 int main() {
