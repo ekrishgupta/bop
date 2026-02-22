@@ -14,6 +14,17 @@ constexpr uint32_t fnv1a(const char *str, uint32_t hash = FNV_OFFSET_BASIS) {
              : fnv1a(str + 1, (hash ^ static_cast<uint32_t>(*str)) * FNV_PRIME);
 }
 
+// Compile-Time Market ID wrapper
+struct MarketId {
+  uint32_t hash;
+  constexpr explicit MarketId(uint32_t h) : hash(h) {}
+};
+
+// User-Defined Literal for Market IDs
+constexpr MarketId operator""_mkt(const char *str, size_t) {
+  return MarketId(fnv1a(str));
+}
+
 // Outcome tags
 struct YES_t {};
 static constexpr YES_t YES;
