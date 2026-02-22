@@ -2,7 +2,7 @@
 
 #include "../../core/market_base.hpp"
 
-namespace bop::markets {
+namespace bop::exchanges {
 
 struct Kalshi : public MarketBackend {
   std::string name() const override { return "Kalshi"; }
@@ -65,4 +65,4 @@ constexpr MarketTarget KalshiTicker(const char *ticker) {
   return Market(ticker, kalshi);
 }
 
-} // namespace bop::markets
+} // namespace bop::exchanges

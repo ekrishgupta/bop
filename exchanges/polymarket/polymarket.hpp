@@ -2,7 +2,7 @@
 
 #include "../../core/market_base.hpp"
 
-namespace bop::markets {
+namespace bop::exchanges {
 
 struct Polymarket : public MarketBackend {
   std::string name() const override { return "Polymarket"; }
@@ -71,4 +71,4 @@ constexpr MarketTarget PolyMarket(const char *id) {
   return Market(id, polymarket);
 }
 
-} // namespace bop::markets
+} // namespace bop::exchanges

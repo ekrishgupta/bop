@@ -1,6 +1,6 @@
 #include "bop.hpp"
-#include "markets/kalshi/kalshi.hpp"
-#include "markets/polymarket/polymarket.hpp"
+#include "exchanges/kalshi/kalshi.hpp"
+#include "exchanges/polymarket/polymarket.hpp"
 #include <iostream>
 
 ExecutionEngine LiveExchange; // Global instance for testing
@@ -249,7 +249,7 @@ void pro_strategy() {
 void arbitrage_strategy() {
   std::cout << "\nRunning Multi-Market Arbitrage Strategy...\n";
 
-  using namespace bop::markets;
+  using namespace bop::exchanges;
 
   // Cross-market price comparison
   // Buy on Kalshi if it's cheaper than Polymarket
