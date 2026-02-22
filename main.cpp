@@ -157,9 +157,9 @@ void my_strategy() {
 
   // OCO Order and Trailing Stop validation
   auto oco_order =
-      Either(Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks),
-             Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
-                 TrailingStop(5_ticks));
+      (Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks)) ||
+      (Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
+       TrailingStop(5_ticks));
   oco_order >> LiveExchange;
 
   std::cout
