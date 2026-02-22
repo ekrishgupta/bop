@@ -10,6 +10,7 @@ struct VolumeTag {};
 struct PositionTag {};
 struct BalanceTag {};
 struct SpreadTag {};
+struct DepthTag {};
 
 template <typename Tag> struct MarketQuery {
   MarketId market;
@@ -32,6 +33,11 @@ struct MarketTarget {
   constexpr MarketQuery<VolumeTag> Volume(NO_t) const {
     return {market, false};
   }
+
+  // Market Depth Queries
+  constexpr MarketQuery<DepthTag> Spread() const { return {market, true}; }
+  constexpr MarketQuery<DepthTag> BestBid() const { return {market, true}; }
+  constexpr MarketQuery<DepthTag> BestAsk() const { return {market, false}; }
 };
 
 // Spread Logic
@@ -185,6 +191,16 @@ constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
 }
 constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), false};
+}
+
+// Depth Comparisons
+constexpr Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
+                                        int64_t threshold) {
+  return {q, threshold, false};
+}
+constexpr Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
+                                        int64_t threshold) {
+  return {q, threshold, true};
 }
 
 // Position comparisons
