@@ -111,6 +111,20 @@ void my_strategy() {
             << "Is VWAP: " << (trade_vwap.is_vwap ? "true" : "false") << "\n"
             << "VWAP Max Participation: " << trade_vwap.vwap_participation * 100
             << "%" << std::endl;
+
+  // Bracket Order validation
+  auto trade_bracket =
+      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(0.50)) &
+      TakeProfit(0.70) & StopLoss(0.40);
+  trade_bracket >> LiveExchange;
+
+  std::cout << "\nOrder 6 (Bracket) generated explicitly on stack.\n"
+            << "Action: " << (trade_bracket.is_buy ? "Buy " : "Sell ")
+            << trade_bracket.quantity << "\n"
+            << "Market Hash: " << trade_bracket.market.hash << "\n"
+            << "Limit Price: $" << trade_bracket.price << "\n"
+            << "Take Profit: $" << trade_bracket.tp_price << "\n"
+            << "Stop Loss: $" << trade_bracket.sl_price << std::endl;
 }
 
 int main() {
