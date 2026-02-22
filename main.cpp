@@ -164,6 +164,24 @@ void my_strategy() {
               ? oco_order.order2.trail_amount
               : 0)
       << " ticks)" << std::endl;
+
+  // Atomic Order Batching
+  std::cout << "\nAtomic Order Batching demonstration:\n";
+  std::initializer_list<bop::Order> batch = {
+      Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks),
+      Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()};
+  batch >> LiveExchange;
+  std::cout << "Sent 2 orders as a single atomic batch.\n";
+
+  // New: Complex Multi-Signal Trigger (Logical Condition Composition)
+  auto multi_signal = When(Market("BTC").Price(YES) > 0.60 &&
+                           Market("ETH").Price(YES) < 0.40) >>
+                      Buy(100) / "BTC" / YES;
+  multi_signal >> LiveExchange;
+
+  std::cout << "\nOrder 8 (Complex Multi-Signal) generated.\n"
+            << "Condition Type: BTC.Price > 0.60 AND ETH.Price < 0.40\n"
+            << "Action: Buy 100 BTC YES @ Market" << std::endl;
 }
 
 int main() {
