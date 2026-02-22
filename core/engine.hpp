@@ -12,6 +12,9 @@ namespace bop {
 struct ExecutionEngine {
   virtual int64_t get_position(MarketId market) const { return 0; }
   virtual int64_t get_balance() const { return 0; }
+  virtual int64_t get_exposure() const { return 0; }
+  virtual int64_t get_pnl() const { return 0; }
+  virtual int64_t get_depth(MarketId market, bool is_bid) const { return 0; }
 };
 
 // Global instance for testing the syntax
@@ -67,6 +70,15 @@ inline bool Condition<Tag, Q>::eval() const {
     return is_greater ? val > threshold : val < threshold;
   } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
     int64_t val = LiveExchange.get_balance();
+    return is_greater ? val > threshold : val < threshold;
+  } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
+    int64_t val = LiveExchange.get_exposure();
+    return is_greater ? val > threshold : val < threshold;
+  } else if constexpr (std::is_same_v<Tag, PnLTag>) {
+    int64_t val = LiveExchange.get_pnl();
+    return is_greater ? val > threshold : val < threshold;
+  } else if constexpr (std::is_same_v<Tag, DepthTag>) {
+    int64_t val = LiveExchange.get_depth(query.market, query.outcome_yes);
     return is_greater ? val > threshold : val < threshold;
   }
   return false;
