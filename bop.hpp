@@ -96,6 +96,10 @@ constexpr int operator"" _shares(unsigned long long int v) {
   return static_cast<int>(v);
 }
 
+constexpr int64_t operator"" _ticks(unsigned long long int v) {
+  return static_cast<int64_t>(v);
+}
+
 // Intermediate DSL structure: Market Bound
 struct MarketBoundOrder {
   int quantity;
@@ -186,25 +190,24 @@ constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
   return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, false};
 }
 
-// OutcomeBoundOrder + LimitPrice -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
   return Order{
       o.market, o.quantity,          o.is_buy, o.outcome_yes,    lp.price,
-      false,    ReferencePrice::Mid, 0.0,      TimeInForce::GTC, false,
+      false,    ReferencePrice::Mid, 0,        TimeInForce::GTC, false,
       0};
 }
 
-// OutcomeBoundOrder + MarketPrice -> Order (Price = 0.0 or Inf conceptually, 0
+// OutcomeBoundOrder + MarketPrice -> Order (Price = 0 or Inf conceptually, 0
 // for now)
 constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
-  return Order{o.market, o.quantity,          o.is_buy, o.outcome_yes,    0.0,
-               false,    ReferencePrice::Mid, 0.0,      TimeInForce::GTC, false,
+  return Order{o.market, o.quantity,          o.is_buy, o.outcome_yes,    0,
+               false,    ReferencePrice::Mid, 0,        TimeInForce::GTC, false,
                0};
 }
 
 // OutcomeBoundOrder + Peg -> Order
 constexpr Order operator+(const OutcomeBoundOrder &o, Peg p) {
-  return Order{o.market, o.quantity, o.is_buy,         o.outcome_yes, 0.0, true,
+  return Order{o.market, o.quantity, o.is_buy,         o.outcome_yes, 0, true,
                p.ref,    p.offset,   TimeInForce::GTC, false,         0};
 }
 
