@@ -156,12 +156,10 @@ void my_strategy() {
             << "Stop Loss: " << trade_bracket.sl_price << " ticks" << std::endl;
 
   // OCO Order and Trailing Stop validation
-  auto take_profit =
-      Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks);
-  auto stop_loss =
-      Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
-      TrailingStop(5_ticks);
-  auto oco_order = take_profit || stop_loss;
+  auto oco_order =
+      Either(Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks),
+             Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
+                 TrailingStop(5_ticks));
   oco_order >> LiveExchange;
 
   std::cout
@@ -198,10 +196,9 @@ void my_strategy() {
 
   // Atomic Order Batching
   std::cout << "\nAtomic Order Batching demonstration:\n";
-  std::initializer_list<bop::Order> batch = {
-      Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks),
-      Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()};
-  batch >> LiveExchange;
+  Batch({Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks),
+         Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()}) >>
+      LiveExchange;
   std::cout << "Sent 2 orders as a single atomic batch.\n";
 
   // New: Complex Multi-Signal Trigger (Logical Condition Composition)

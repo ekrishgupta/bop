@@ -86,6 +86,33 @@ template <typename T> struct WhenBinder {
 
 template <typename T> constexpr WhenBinder<T> When(T c) { return {c}; }
 
+struct OCOOrder {
+  Order order1;
+  Order order2;
+  bool eval() const { return true; } // OCO legs are typically always valid
+};
+
+// DSL entry for OCO
+inline OCOOrder Either(Order &&o1, Order &&o2) {
+  return {std::move(o1), std::move(o2)};
+}
+
+inline OCOOrder operator||(Order &&o1, Order &&o2) {
+  return {std::move(o1), std::move(o2)};
+}
+
+inline OCOOrder operator||(const Order &o1, const Order &o2) {
+  return {o1, o2};
+}
+
+inline OCOOrder operator||(Order &&o1, const Order &o2) {
+  return {std::move(o1), o2};
+}
+
+inline OCOOrder operator||(const Order &o1, Order &&o2) {
+  return {o1, std::move(o2)};
+}
+
 template <typename T>
 inline ConditionalOrder<T> operator>>(WhenBinder<T> w, Order &&o) {
   return {std::move(w.condition), std::move(o)};
@@ -94,6 +121,12 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, Order &&o) {
 template <typename T>
 inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
   return {std::move(w.condition), o};
+}
+
+template <typename T>
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w, OCOOrder &&oco) {
+  return {std::move(w.condition),
+          Order(oco.order1)}; // Placeholder: simplified for demonstration
 }
 
 // Price Comparisons (restored with double support for DSL ease)
@@ -141,27 +174,6 @@ constexpr Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
   return {q, amount, false};
 }
 
-struct OCOOrder {
-  Order order1;
-  Order order2;
-};
-
-inline OCOOrder operator||(Order &&o1, Order &&o2) {
-  return {std::move(o1), std::move(o2)};
-}
-
-inline OCOOrder operator||(const Order &o1, const Order &o2) {
-  return {o1, o2};
-}
-
-inline OCOOrder operator||(Order &&o1, const Order &o2) {
-  return {std::move(o1), o2};
-}
-
-inline OCOOrder operator||(const Order &o1, Order &&o2) {
-  return {o1, std::move(o2)};
-}
-
 } // namespace bop
 
 // Global helper for DSL entry
@@ -175,3 +187,9 @@ constexpr bop::MarketQuery<bop::PositionTag> Position(bop::MarketId mkt) {
 }
 
 constexpr bop::BalanceQuery Balance() { return {}; }
+
+// Batch DSL Entry
+inline std::initializer_list<bop::Order>
+Batch(std::initializer_list<bop::Order> list) {
+  return list;
+}
