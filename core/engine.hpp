@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "logic.hpp"
+#include <iostream>
 
 #include <initializer_list>
 #include <type_traits>

@@ -70,6 +70,10 @@ template <typename L, typename R> struct OrCondition {
 template <typename T> struct ConditionalOrder {
   T condition;
   Order order;
+
+  ConditionalOrder(T c, Order &&o)
+      : condition(std::move(c)), order(std::move(o)) {}
+  ConditionalOrder(T c, const Order &o) : condition(std::move(c)), order(o) {}
 };
 
 template <typename T> struct WhenBinder {
@@ -79,14 +83,19 @@ template <typename T> struct WhenBinder {
 template <typename T> constexpr WhenBinder<T> When(T c) { return {c}; }
 
 template <typename T>
-constexpr ConditionalOrder<T> operator>>(WhenBinder<T> w, Order o) {
-  return {w.condition, o};
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w, Order &&o) {
+  return {std::move(w.condition), std::move(o)};
 }
 
 template <typename T>
-constexpr ConditionalOrder<T> operator>>(WhenBinder<T> w,
-                                         OutcomeBoundOrder oo) {
-  return {w.condition, {oo.market, oo.quantity, oo.is_buy, oo.outcome_yes, 0}};
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
+  return {std::move(w.condition), o};
+}
+
+template <typename T>
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w, OutcomeBoundOrder oo) {
+  return {std::move(w.condition), Order(oo.market, oo.quantity, oo.is_buy,
+                                        oo.outcome_yes, 0, oo.timestamp_ns)};
 }
 
 // Price Comparisons (restored with double support for DSL ease)
@@ -139,8 +148,20 @@ struct OCOOrder {
   Order order2;
 };
 
-constexpr OCOOrder operator||(const Order &o1, const Order &o2) {
+inline OCOOrder operator||(Order &&o1, Order &&o2) {
+  return {std::move(o1), std::move(o2)};
+}
+
+inline OCOOrder operator||(const Order &o1, const Order &o2) {
   return {o1, o2};
+}
+
+inline OCOOrder operator||(Order &&o1, const Order &o2) {
+  return {std::move(o1), o2};
+}
+
+inline OCOOrder operator||(const Order &o1, Order &&o2) {
+  return {o1, std::move(o2)};
 }
 
 } // namespace bop

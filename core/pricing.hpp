@@ -30,18 +30,20 @@ struct TrailingStop {
 };
 
 // OutcomeBoundOrder + LimitPrice -> Order
-constexpr Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
-  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, lp.price};
+inline Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
+  return Order{o.market,      o.quantity, o.is_buy,
+               o.outcome_yes, lp.price,   o.timestamp_ns};
 }
 
 // OutcomeBoundOrder + MarketPrice -> Order
-constexpr Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
-  return Order{o.market, o.quantity, o.is_buy, o.outcome_yes, 0};
+inline Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
+  return Order{o.market,      o.quantity, o.is_buy,
+               o.outcome_yes, 0,          o.timestamp_ns};
 }
 
 // OutcomeBoundOrder + Peg -> Order
-constexpr Order operator+(const OutcomeBoundOrder &o, Peg p) {
-  Order ord{o.market, o.quantity, o.is_buy, o.outcome_yes, 0};
+inline Order operator+(const OutcomeBoundOrder &o, Peg p) {
+  Order ord{o.market, o.quantity, o.is_buy, o.outcome_yes, 0, o.timestamp_ns};
   ord.algo_type = AlgoType::Peg;
   ord.peg = {p.ref, p.offset};
   return ord;

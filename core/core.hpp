@@ -77,28 +77,32 @@ struct Order {
     int64_t trail_amount;
   };
 
-  Order(MarketId m, int q, bool b, bool y, int64_t p)
+  Order(MarketId m, int q, bool b, bool y, int64_t p, int64_t ts)
       : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p),
-        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}) {
-    creation_timestamp_ns =
-        std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  }
+        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}),
+        creation_timestamp_ns(ts) {}
 };
 
 // Action Types
 struct Buy {
   int quantity;
-  constexpr explicit Buy(int q) : quantity(q) {
+  int64_t timestamp_ns;
+  explicit Buy(int q) : quantity(q) {
     if (q <= 0)
       throw std::invalid_argument("Buy quantity must be positive");
+    timestamp_ns =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
   }
 };
 
 struct Sell {
   int quantity;
-  constexpr explicit Sell(int q) : quantity(q) {
+  int64_t timestamp_ns;
+  explicit Sell(int q) : quantity(q) {
     if (q <= 0)
       throw std::invalid_argument("Sell quantity must be positive");
+    timestamp_ns =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
   }
 };
 
@@ -107,6 +111,7 @@ struct MarketBoundOrder {
   int quantity;
   bool is_buy;
   MarketId market;
+  int64_t timestamp_ns;
 };
 
 // Intermediate DSL structure: Outcome Bound
@@ -115,30 +120,35 @@ struct OutcomeBoundOrder {
   bool is_buy;
   MarketId market;
   bool outcome_yes;
+  int64_t timestamp_ns;
 };
 
-constexpr MarketBoundOrder operator/(const Buy &b, MarketId market) {
-  return MarketBoundOrder{b.quantity, true, market};
+inline MarketBoundOrder operator/(const Buy &b, MarketId market) {
+  return MarketBoundOrder{b.quantity, true, market, b.timestamp_ns};
 }
 
-constexpr MarketBoundOrder operator/(const Buy &b, const char *market) {
-  return MarketBoundOrder{b.quantity, true, MarketId(fnv1a(market))};
+inline MarketBoundOrder operator/(const Buy &b, const char *market) {
+  return MarketBoundOrder{b.quantity, true, MarketId(fnv1a(market)),
+                          b.timestamp_ns};
 }
 
-constexpr MarketBoundOrder operator/(const Sell &s, MarketId market) {
-  return MarketBoundOrder{s.quantity, false, market};
+inline MarketBoundOrder operator/(const Sell &s, MarketId market) {
+  return MarketBoundOrder{s.quantity, false, market, s.timestamp_ns};
 }
 
-constexpr MarketBoundOrder operator/(const Sell &s, const char *market) {
-  return MarketBoundOrder{s.quantity, false, MarketId(fnv1a(market))};
+inline MarketBoundOrder operator/(const Sell &s, const char *market) {
+  return MarketBoundOrder{s.quantity, false, MarketId(fnv1a(market)),
+                          s.timestamp_ns};
 }
 
-constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, YES_t) {
-  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, true};
+inline OutcomeBoundOrder operator/(const MarketBoundOrder &m, YES_t) {
+  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, true,
+                           m.timestamp_ns};
 }
 
-constexpr OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
-  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, false};
+inline OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
+  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, false,
+                           m.timestamp_ns};
 }
 
 } // namespace bop
