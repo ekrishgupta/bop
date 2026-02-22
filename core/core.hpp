@@ -114,15 +114,6 @@ struct MarketBoundOrder {
   int64_t timestamp_ns;
 };
 
-// Intermediate DSL structure: Outcome Bound
-struct OutcomeBoundOrder {
-  int quantity;
-  bool is_buy;
-  MarketId market;
-  bool outcome_yes;
-  int64_t timestamp_ns;
-};
-
 inline MarketBoundOrder operator/(const Buy &b, MarketId market) {
   return MarketBoundOrder{b.quantity, true, market, b.timestamp_ns};
 }
@@ -141,14 +132,12 @@ inline MarketBoundOrder operator/(const Sell &s, const char *market) {
                           s.timestamp_ns};
 }
 
-inline OutcomeBoundOrder operator/(const MarketBoundOrder &m, YES_t) {
-  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, true,
-                           m.timestamp_ns};
+inline Order operator/(const MarketBoundOrder &m, YES_t) {
+  return Order{m.market, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
 }
 
-inline OutcomeBoundOrder operator/(const MarketBoundOrder &m, NO_t) {
-  return OutcomeBoundOrder{m.quantity, m.is_buy, m.market, false,
-                           m.timestamp_ns};
+inline Order operator/(const MarketBoundOrder &m, NO_t) {
+  return Order{m.market, m.quantity, m.is_buy, false, 0, m.timestamp_ns};
 }
 
 } // namespace bop

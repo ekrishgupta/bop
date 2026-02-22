@@ -92,12 +92,6 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
   return {std::move(w.condition), o};
 }
 
-template <typename T>
-inline ConditionalOrder<T> operator>>(WhenBinder<T> w, OutcomeBoundOrder oo) {
-  return {std::move(w.condition), Order(oo.market, oo.quantity, oo.is_buy,
-                                        oo.outcome_yes, 0, oo.timestamp_ns)};
-}
-
 // Price Comparisons (restored with double support for DSL ease)
 constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q,
                                         int64_t ticks) {

@@ -29,24 +29,38 @@ struct TrailingStop {
   }
 };
 
-// OutcomeBoundOrder + LimitPrice -> Order
-inline Order operator+(const OutcomeBoundOrder &o, LimitPrice lp) {
-  return Order{o.market,      o.quantity, o.is_buy,
-               o.outcome_yes, lp.price,   o.timestamp_ns};
+// Order + LimitPrice -> Order
+inline Order &operator+(Order &o, LimitPrice lp) {
+  o.price = lp.price;
+  return o;
+}
+inline Order &&operator+(Order &&o, LimitPrice lp) {
+  o.price = lp.price;
+  return std::move(o);
 }
 
-// OutcomeBoundOrder + MarketPrice -> Order
-inline Order operator+(const OutcomeBoundOrder &o, MarketPrice) {
-  return Order{o.market,      o.quantity, o.is_buy,
-               o.outcome_yes, 0,          o.timestamp_ns};
+// Order + MarketPrice -> Order
+inline Order &operator+(Order &o, MarketPrice) {
+  o.price = 0;
+  return o;
+}
+inline Order &&operator+(Order &&o, MarketPrice) {
+  o.price = 0;
+  return std::move(o);
 }
 
-// OutcomeBoundOrder + Peg -> Order
-inline Order operator+(const OutcomeBoundOrder &o, Peg p) {
-  Order ord{o.market, o.quantity, o.is_buy, o.outcome_yes, 0, o.timestamp_ns};
-  ord.algo_type = AlgoType::Peg;
-  ord.peg = {p.ref, p.offset};
-  return ord;
+// Order + Peg -> Order
+inline Order &operator+(Order &o, Peg p) {
+  o.price = 0;
+  o.algo_type = AlgoType::Peg;
+  o.peg = {p.ref, p.offset};
+  return o;
+}
+inline Order &&operator+(Order &&o, Peg p) {
+  o.price = 0;
+  o.algo_type = AlgoType::Peg;
+  o.peg = {p.ref, p.offset};
+  return std::move(o);
 }
 
 } // namespace bop
