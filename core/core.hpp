@@ -64,6 +64,7 @@ struct Order {
   int64_t tp_price = 0;
   int64_t sl_price = 0;
   SelfTradePrevention stp = SelfTradePrevention::None;
+  int64_t creation_timestamp_ns = 0;
 
   AlgoType algo_type = AlgoType::None;
   union {
@@ -76,9 +77,12 @@ struct Order {
     int64_t trail_amount;
   };
 
-  constexpr Order(MarketId m, int q, bool b, bool y, int64_t p)
+  Order(MarketId m, int q, bool b, bool y, int64_t p)
       : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p),
-        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}) {}
+        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}) {
+    creation_timestamp_ns =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  }
 };
 
 // Action Types
