@@ -152,6 +152,28 @@ constexpr Order operator|(Order o, Iceberg ib) {
   return o;
 }
 
+// Conditional Triggers
+struct MarketQuery {
+  MarketId market;
+  bool outcome_yes;
+};
+
+struct MarketTarget {
+  MarketId market;
+  constexpr MarketQuery Price(YES_t) const { return {market, true}; }
+  constexpr MarketQuery Price(NO_t) const { return {market, false}; }
+};
+constexpr MarketTarget Market(MarketId mkt) { return {mkt}; }
+
+struct Condition {
+  MarketQuery query;
+  double threshold;
+  bool is_greater;
+};
+
+constexpr Condition operator>(MarketQuery q, double t) { return {q, t, true}; }
+constexpr Condition operator<(MarketQuery q, double t) { return {q, t, false}; }
+
 // Execution Engine Mock for Dispatching
 struct ExecutionEngine {
   // In a real system, might contain connection state or ring buffer index.
