@@ -60,11 +60,15 @@ constexpr OrCondition<L, R> operator||(const L &l, const R &r) {
 template <typename L, typename R> struct AndCondition {
   L left;
   R right;
+  bool eval() const { return left.eval() && right.eval(); }
+  operator bool() const { return eval(); }
 };
 
 template <typename L, typename R> struct OrCondition {
   L left;
   R right;
+  bool eval() const { return left.eval() || right.eval(); }
+  operator bool() const { return eval(); }
 };
 
 template <typename T> struct ConditionalOrder {

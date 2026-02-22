@@ -43,8 +43,15 @@ inline void operator>>(std::initializer_list<bop::Order> batch,
 
 template <typename Tag>
 inline void operator>>(const bop::ConditionalOrder<Tag> &co,
-                       bop::ExecutionEngine &) {
-  (void)co;
+                       bop::ExecutionEngine &engine) {
+  if (co.condition.eval()) {
+    std::cout << "[CONDITION] Passed conditional evaluation. Dispatching..."
+              << std::endl;
+    co.order >> engine;
+  } else {
+    std::cout << "[CONDITION] Failed conditional evaluation. Suppressing order."
+              << std::endl;
+  }
 }
 
 inline void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &) {

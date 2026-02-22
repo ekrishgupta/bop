@@ -217,18 +217,14 @@ void my_strategy() {
 
 void risk_aware_strategy() {
   std::cout << "\nRunning Risk-Aware Strategy...\n";
-  // The new Position() and Balance() keywords in action
-  if (Position("MarsLanding"_mkt) < 1000) {
-    auto order =
-        Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks);
-    order >> LiveExchange;
-    std::cout << "Risk-aware check passed: Position is below 1000. Order sent."
-              << std::endl;
-  }
 
-  if (Balance() > 5000) {
-    std::cout << "Risk-aware check passed: Balance is above 5000." << std::endl;
-  }
+  // The new Position() and Balance() keywords in action using the clean
+  // pipeline DSL
+  auto risk_aware_order =
+      When(Position("MarsLanding"_mkt) < 1000 && Balance() > 5000) >>
+      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks));
+
+  risk_aware_order >> LiveExchange;
 }
 
 int main() {
