@@ -74,6 +74,10 @@ struct Order {
 
   // Account/Risk Routing
   uint32_t account_hash = 0; // 0 = Default Account
+
+  // Bracket Orders (0 means not set)
+  double tp_price = 0.0;
+  double sl_price = 0.0;
 };
 
 // Action Types
@@ -145,6 +149,17 @@ struct TWAP {
 struct VWAP {
   double max_participation_rate;
   constexpr explicit VWAP(double rate) : max_participation_rate(rate) {}
+};
+
+// Bracket Order Legs
+struct TakeProfit {
+  double price;
+  constexpr explicit TakeProfit(double p) : price(p) {}
+};
+
+struct StopLoss {
+  double price;
+  constexpr explicit StopLoss(double p) : price(p) {}
 };
 
 // Custom Literals for std::chrono
@@ -230,6 +245,16 @@ constexpr Order operator|(Order o, VWAP v) {
 // Account Routing via operator|
 constexpr Order operator|(Order o, Account a) {
   o.account_hash = a.hash;
+  return o;
+}
+
+// Bracket Legs via operator&
+constexpr Order operator&(Order o, TakeProfit tp) {
+  o.tp_price = tp.price;
+  return o;
+}
+constexpr Order operator&(Order o, StopLoss sl) {
+  o.sl_price = sl.price;
   return o;
 }
 
