@@ -65,9 +65,10 @@ void my_strategy() {
             << "Action Execution: "
             << (conditional.order.is_buy ? "Buy " : "Sell ")
             << conditional.order.quantity << std::endl;
-  // Pegged Order
+  // Pegged Order with Account Routing
   auto trade_pegged =
-      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -0.01) | GTC;
+      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -0.01) | GTC |
+      "AlphaFund"_acc;
   trade_pegged >> LiveExchange;
 
   std::cout << "\nOrder 3 generated explicitly on stack.\n"
@@ -82,7 +83,9 @@ void my_strategy() {
                                                                       : "Mid"))
             << "\n"
             << "Pegged Offset: " << trade_pegged.peg_offset << "\n"
-            << "TIF: " << tif_to_string(trade_pegged.tif) << std::endl;
+            << "TIF: " << tif_to_string(trade_pegged.tif) << "\n"
+            << "Account Routing Hash: " << trade_pegged.account_hash
+            << std::endl;
 
   // Execution Algorithms (TWAP/VWAP)
   auto trade_twap =

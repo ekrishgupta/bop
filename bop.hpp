@@ -26,6 +26,17 @@ constexpr MarketId operator""_mkt(const char *str, size_t) {
   return MarketId(fnv1a(str));
 }
 
+// Compile-Time Account ID wrapper
+struct Account {
+  uint32_t hash;
+  constexpr explicit Account(uint32_t h) : hash(h) {}
+};
+
+// User-Defined Literal for Accounts
+constexpr Account operator""_acc(const char *str, size_t) {
+  return Account(fnv1a(str));
+}
+
 // Outcome tags
 struct YES_t {};
 static constexpr YES_t YES;
@@ -60,6 +71,9 @@ struct Order {
   std::chrono::seconds twap_duration{0};
   bool is_vwap = false;
   double vwap_participation = 0.0;
+
+  // Account/Risk Routing
+  uint32_t account_hash = 0; // 0 = Default Account
 };
 
 // Action Types
@@ -210,6 +224,12 @@ constexpr Order operator|(Order o, TWAP t) {
 constexpr Order operator|(Order o, VWAP v) {
   o.is_vwap = true;
   o.vwap_participation = v.max_participation_rate;
+  return o;
+}
+
+// Account Routing via operator|
+constexpr Order operator|(Order o, Account a) {
+  o.account_hash = a.hash;
   return o;
 }
 
