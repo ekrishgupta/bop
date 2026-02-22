@@ -33,12 +33,16 @@ struct MarketTarget {
   }
 };
 
-template <typename Tag> struct Condition {
-  MarketQuery<Tag> query;
+template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
+  Q query;
   int64_t threshold;
   bool is_greater;
-  constexpr Condition(MarketQuery<Tag> q, int64_t t, bool g)
+  constexpr Condition(Q q, int64_t t, bool g)
       : query(q), threshold(t), is_greater(g) {}
+
+  // Context-aware evaluation (implemented in engine.hpp)
+  bool eval() const;
+  operator bool() const { return eval(); }
 };
 
 // Logical Operators for Conditions
