@@ -9,6 +9,7 @@ struct PriceTag {};
 struct VolumeTag {};
 struct PositionTag {};
 struct BalanceTag {};
+struct SpreadTag {};
 
 template <typename Tag> struct MarketQuery {
   MarketId market;
@@ -32,6 +33,38 @@ struct MarketTarget {
     return {market, false};
   }
 };
+
+// Spread Logic
+struct SpreadTarget {
+  MarketId m1;
+  MarketId m2;
+};
+
+inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
+  return {a.market, b.market};
+}
+
+struct MarketBoundSpread {
+  int quantity;
+  bool is_buy;
+  SpreadTarget spread;
+  int64_t timestamp_ns;
+};
+
+inline MarketBoundSpread operator/(const Buy &b, SpreadTarget spread) {
+  return {b.quantity, true, spread, b.timestamp_ns};
+}
+
+inline MarketBoundSpread operator/(const Sell &s, SpreadTarget spread) {
+  return {s.quantity, false, spread, s.timestamp_ns};
+}
+
+inline Order operator/(const MarketBoundSpread &m, YES_t) {
+  // Overload Order to support spread markets or handle it in engine
+  Order o{m.spread.m1, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
+  o.algo_type = AlgoType::None; // Placeholder: Engine should detect spread
+  return o;
+}
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   Q query;
