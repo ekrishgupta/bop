@@ -7,11 +7,15 @@ namespace bop {
 // Query Tags
 struct PriceTag {};
 struct VolumeTag {};
+struct PositionTag {};
+struct BalanceTag {};
 
 template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
 };
+
+struct BalanceQuery {};
 
 // Forward declaration of composite conditions
 template <typename L, typename R> struct AndCondition;
