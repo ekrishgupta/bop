@@ -1,9 +1,12 @@
 #pragma once
 
+#include "price.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
+#include <variant>
 
 namespace bop {
 
@@ -23,7 +26,11 @@ constexpr uint32_t fnv1a(const char *str, uint32_t hash = FNV_OFFSET_BASIS) {
 // Compile-Time Market ID wrapper
 struct MarketId {
   uint32_t hash;
-  constexpr explicit MarketId(uint32_t h) : hash(h) {}
+  std::string ticker; // Added for real API calls
+
+  explicit MarketId(uint32_t h) : hash(h), ticker("") {}
+  MarketId(const char *t) : hash(fnv1a(t)), ticker(t) {}
+  MarketId(uint32_t h, std::string t) : hash(h), ticker(std::move(t)) {}
 };
 
 // Compile-Time Account ID wrapper
@@ -52,38 +59,38 @@ constexpr ReferencePrice Mid = ReferencePrice::Mid;
 
 enum class AlgoType : uint8_t { None, Peg, TWAP, VWAP, Trailing };
 
-// The Order "State Machine"
+struct PegData {
+  ReferencePrice ref;
+  Price offset;
+};
+
 struct Order {
   MarketId market;
   int quantity;
   bool is_buy;
   bool outcome_yes;
-  int64_t price = 0;
+  Price price = Price(0);
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
   int display_qty = 0;
   uint32_t account_hash = 0;
-  int64_t tp_price = 0;
-  int64_t sl_price = 0;
+  Price tp_price = Price(0);
+  Price sl_price = Price(0);
   SelfTradePrevention stp = SelfTradePrevention::None;
   int64_t creation_timestamp_ns = 0;
   const MarketBackend *backend = nullptr;
 
   AlgoType algo_type = AlgoType::None;
-  union {
-    struct {
-      ReferencePrice ref;
-      int64_t offset;
-    } peg;
-    int64_t twap_duration_sec;
-    double vwap_participation;
-    int64_t trail_amount;
-  };
+  std::variant<std::monostate, PegData, int64_t, double, Price> algo_params;
 
-  Order(MarketId m, int q, bool b, bool y, int64_t p, int64_t ts)
-      : market(m), quantity(q), is_buy(b), outcome_yes(y), price(p),
-        algo_type(AlgoType::None), peg({ReferencePrice::Mid, 0}),
-        creation_timestamp_ns(ts), backend(nullptr) {}
+  MarketId market2 = MarketId(0u);
+  bool is_spread = false;
+
+  Order(MarketId m, int q, bool b, bool y, Price p, int64_t ts)
+      : market(m), market2(0u), is_spread(false), quantity(q), is_buy(b),
+        outcome_yes(y), price(p), algo_type(AlgoType::None),
+        algo_params(std::monostate{}), creation_timestamp_ns(ts),
+        backend(nullptr) {}
 };
 
 // Action Types
@@ -123,8 +130,7 @@ inline MarketBoundOrder operator/(const Buy &b, MarketId market) {
 }
 
 inline MarketBoundOrder operator/(const Buy &b, const char *market) {
-  return MarketBoundOrder{b.quantity, true, MarketId(fnv1a(market)),
-                          b.timestamp_ns};
+  return MarketBoundOrder{b.quantity, true, MarketId(market), b.timestamp_ns};
 }
 
 inline MarketBoundOrder operator/(const Sell &s, MarketId market) {
@@ -132,18 +138,17 @@ inline MarketBoundOrder operator/(const Sell &s, MarketId market) {
 }
 
 inline MarketBoundOrder operator/(const Sell &s, const char *market) {
-  return MarketBoundOrder{s.quantity, false, MarketId(fnv1a(market)),
-                          s.timestamp_ns};
+  return MarketBoundOrder{s.quantity, false, MarketId(market), s.timestamp_ns};
 }
 
 inline Order operator/(const MarketBoundOrder &m, YES_t) {
-  Order o{m.market, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
+  Order o{m.market, m.quantity, m.is_buy, true, Price(0), m.timestamp_ns};
   o.backend = m.backend;
   return o;
 }
 
 inline Order operator/(const MarketBoundOrder &m, NO_t) {
-  Order o{m.market, m.quantity, m.is_buy, false, 0, m.timestamp_ns};
+  Order o{m.market, m.quantity, m.is_buy, false, Price(0), m.timestamp_ns};
   o.backend = m.backend;
   return o;
 }
@@ -151,8 +156,8 @@ inline Order operator/(const MarketBoundOrder &m, NO_t) {
 } // namespace bop
 
 // Global literals (keep out of namespace for DSL feel)
-constexpr bop::MarketId operator""_mkt(const char *str, size_t) {
-  return bop::MarketId(bop::fnv1a(str));
+inline bop::MarketId operator""_mkt(const char *str, size_t) {
+  return bop::MarketId(str);
 }
 
 constexpr bop::Account operator""_acc(const char *str, size_t) {
@@ -161,6 +166,18 @@ constexpr bop::Account operator""_acc(const char *str, size_t) {
 
 constexpr int operator"" _shares(unsigned long long int v) {
   return static_cast<int>(v);
+}
+
+constexpr bop::Price operator"" _usd(long double v) {
+  return bop::Price::from_usd(static_cast<double>(v));
+}
+
+constexpr bop::Price operator"" _usd(unsigned long long int v) {
+  return bop::Price::from_usd(static_cast<double>(v));
+}
+
+constexpr bop::Price operator"" _cents(unsigned long long int v) {
+  return bop::Price::from_cents(static_cast<int64_t>(v));
 }
 
 constexpr int64_t operator"" _ticks(unsigned long long int v) {
