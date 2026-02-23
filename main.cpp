@@ -36,8 +36,8 @@ const char *stp_to_string(SelfTradePrevention stp) {
 void my_strategy() {
   // This is the BOP Language in action
   auto trade_limit =
-      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(65_ticks) | IOC |
-      PostOnly;
+      Buy(500_shares) / "FedRateCut"_mkt / YES + LimitPrice(Price(65_ticks)) |
+      IOC | PostOnly;
   auto trade_market =
       Sell(1000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | FOK |
       Iceberg(100_shares);
@@ -51,7 +51,7 @@ void my_strategy() {
             << "Quantity: " << trade_limit.quantity << "\n"
             << "Market Hash: " << trade_limit.market.hash << "\n"
             << "Outcome: " << (trade_limit.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: " << trade_limit.price << " ticks\n"
+            << "Price: " << trade_limit.price.raw << " ticks\n"
             << "TIF: " << tif_to_string(trade_limit.tif) << "\n"
             << "PostOnly: " << (trade_limit.post_only ? "true" : "false")
             << "\n"
@@ -62,7 +62,7 @@ void my_strategy() {
             << "Quantity: " << trade_market.quantity << "\n"
             << "Market Hash: " << trade_market.market.hash << "\n"
             << "Outcome: " << (trade_market.outcome_yes ? "YES" : "NO") << "\n"
-            << "Price: " << trade_market.price << " (Market)\n"
+            << "Price: " << trade_market.price.raw << " (Market)\n"
             << "TIF: " << tif_to_string(trade_market.tif) << "\n"
             << "PostOnly: " << (trade_market.post_only ? "true" : "false")
             << "\n"
@@ -84,35 +84,40 @@ void my_strategy() {
             << conditional.order.quantity << std::endl;
   // Pegged Order with Account Routing
   auto trade_pegged =
-      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, -1_ticks) | GTC |
-      "AlphaFund"_acc;
+      Buy(300_shares) / "FedRateCut"_mkt / YES + Peg(Bid, Price(-1_ticks)) |
+      GTC | "AlphaFund"_acc;
   trade_pegged >> LiveExchange;
 
-  std::cout
-      << "\nOrder 3 generated explicitly on stack.\n"
-      << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
-      << "Quantity: " << trade_pegged.quantity << "\n"
-      << "Market Hash: " << trade_pegged.market.hash << "\n"
-      << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
-      << "Pegged Reference: "
-      << (trade_pegged.algo_type == AlgoType::Peg
-              ? (trade_pegged.peg.ref == ReferencePrice::Bid
-                     ? "Bid"
-                     : (trade_pegged.peg.ref == ReferencePrice::Ask ? "Ask"
-                                                                    : "Mid"))
-              : "None")
-      << "\n"
-      << "Pegged Offset: "
-      << (trade_pegged.algo_type == AlgoType::Peg ? trade_pegged.peg.offset : 0)
-      << "\n"
-      << "TIF: " << tif_to_string(trade_pegged.tif) << "\n"
-      << "Account Routing Hash: " << trade_pegged.account_hash << std::endl;
+  std::cout << "\nOrder 3 generated explicitly on stack.\n"
+            << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
+            << "Quantity: " << trade_pegged.quantity << "\n"
+            << "Market Hash: " << trade_pegged.market.hash << "\n"
+            << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
+            << "Pegged Reference: "
+            << (trade_pegged.algo_type == AlgoType::Peg
+                    ? (std::get<PegData>(trade_pegged.algo_params).ref ==
+                               ReferencePrice::Bid
+                           ? "Bid"
+                           : (std::get<PegData>(trade_pegged.algo_params).ref ==
+                                      ReferencePrice::Ask
+                                  ? "Ask"
+                                  : "Mid"))
+                    : "None")
+            << "\n"
+            << "Pegged Offset: "
+            << (trade_pegged.algo_type == AlgoType::Peg
+                    ? std::get<PegData>(trade_pegged.algo_params).offset.raw
+                    : 0)
+            << "\n"
+            << "TIF: " << tif_to_string(trade_pegged.tif) << "\n"
+            << "Account Routing Hash: " << trade_pegged.account_hash
+            << std::endl;
 
   // Execution Algorithms (TWAP/VWAP)
   auto trade_twap =
       Sell(5000_shares) / "FedRateCut"_mkt / NO + MarketPrice() | TWAP(15_min);
   auto trade_vwap =
-      Buy(10000_shares) / "FedRateCut"_mkt / YES + LimitPrice(55_ticks) |
+      Buy(10000_shares) / "FedRateCut"_mkt / YES + LimitPrice(Price(55_ticks)) |
       VWAP(0.10); // 10% participation
   trade_twap >> LiveExchange;
   trade_vwap >> LiveExchange;
@@ -126,7 +131,7 @@ void my_strategy() {
             << "\n"
             << "TWAP Duration (sec): "
             << (trade_twap.algo_type == AlgoType::TWAP
-                    ? trade_twap.twap_duration_sec
+                    ? std::get<int64_t>(trade_twap.algo_params)
                     : 0)
             << std::endl;
 
@@ -139,52 +144,55 @@ void my_strategy() {
             << "\n"
             << "VWAP Max Participation: "
             << (trade_vwap.algo_type == AlgoType::VWAP
-                    ? trade_vwap.vwap_participation * 100
+                    ? std::get<double>(trade_vwap.algo_params) * 100
                     : 0)
             << "%" << std::endl;
 
   // Bracket Order validation
-  auto trade_bracket =
-      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks)) &
-      TakeProfit(70_ticks) & StopLoss(40_ticks);
+  auto trade_bracket = (Buy(100_shares) / "MarsLanding"_mkt / YES +
+                        LimitPrice(Price(50_ticks))) &
+                       TakeProfit(Price(70_ticks)) & StopLoss(Price(40_ticks));
   trade_bracket >> LiveExchange;
 
   std::cout << "\nOrder 6 (Bracket) generated explicitly on stack.\n"
             << "Action: " << (trade_bracket.is_buy ? "Buy " : "Sell ")
             << trade_bracket.quantity << "\n"
             << "Market Hash: " << trade_bracket.market.hash << "\n"
-            << "Limit Price: " << trade_bracket.price << " ticks\n"
-            << "Take Profit: " << trade_bracket.tp_price << " ticks\n"
-            << "Stop Loss: " << trade_bracket.sl_price << " ticks" << std::endl;
+            << "Limit Price: " << trade_bracket.price.raw << " ticks\n"
+            << "Take Profit: " << trade_bracket.tp_price.raw << " ticks\n"
+            << "Stop Loss: " << trade_bracket.sl_price.raw << " ticks"
+            << std::endl;
 
   // OCO Order and Trailing Stop validation
-  auto oco_order =
-      (Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(80_ticks)) ||
-      (Sell(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(45_ticks) |
-       TrailingStop(5_ticks));
+  auto oco_order = (Sell(100_shares) / "MarsLanding"_mkt / YES +
+                    LimitPrice(Price(80_ticks))) ||
+                   (Sell(100_shares) / "MarsLanding"_mkt / YES +
+                        LimitPrice(Price(45_ticks)) |
+                    TrailingStop(Price(5_ticks)));
   oco_order >> LiveExchange;
 
   std::cout
       << "\nOrder 7 (OCO with Trailing Stop) generated explicitly on stack.\n"
       << "Leg 1 Action: " << (oco_order.order1.is_buy ? "Buy " : "Sell ")
       << oco_order.order1.quantity << "\n"
-      << "Leg 1 Price: " << oco_order.order1.price << " ticks\n"
+      << "Leg 1 Price: " << oco_order.order1.price.raw << " ticks\n"
       << "Leg 2 Action: " << (oco_order.order2.is_buy ? "Buy " : "Sell ")
       << oco_order.order2.quantity << "\n"
-      << "Leg 2 Price: " << oco_order.order2.price << " ticks\n"
+      << "Leg 2 Price: " << oco_order.order2.price.raw << " ticks\n"
       << "Leg 2 Trailing: "
       << (oco_order.order2.algo_type == AlgoType::Trailing ? "true" : "false")
       << " (Amount: "
       << (oco_order.order2.algo_type == AlgoType::Trailing
-              ? oco_order.order2.trail_amount
+              ? std::get<int64_t>(oco_order.order2.algo_params)
               : 0)
       << " ticks)" << std::endl;
 
   // Self-Trade Prevention validation
   auto trade_stp =
-      Buy(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(60_ticks) | STP;
+      Buy(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(Price(60_ticks)) |
+      STP;
   auto trade_stp_custom =
-      Sell(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(60_ticks) |
+      Sell(200_shares) / "FedRateCut"_mkt / YES + LimitPrice(Price(60_ticks)) |
       CancelOld;
   trade_stp >> LiveExchange;
   trade_stp_custom >> LiveExchange;
@@ -198,14 +206,15 @@ void my_strategy() {
 
   // Atomic Order Batching
   std::cout << "\nAtomic Order Batching demonstration:\n";
-  Batch({Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks),
-         Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()}) >>
+  Batch(
+      {Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(Price(50_ticks)),
+       Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()}) >>
       LiveExchange;
   std::cout << "Sent 2 orders as a single atomic batch.\n";
 
   // New: Complex Multi-Signal Trigger (Logical Condition Composition)
-  auto multi_signal = When(Market("BTC").Price(YES) > 0.60 &&
-                           Market("ETH").Price(YES) < 0.40) >>
+  auto multi_signal = When(Market("BTC").Price(YES) > 60_ticks &&
+                           Market("ETH").Price(YES) < 40_ticks) >>
                       Buy(100) / "BTC" / YES;
   multi_signal >> LiveExchange;
 
@@ -221,7 +230,7 @@ void risk_aware_strategy() {
   // pipeline DSL
   auto risk_aware_order =
       When(Position("MarsLanding"_mkt) < 1000 && Balance() > 5000) >>
-      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(50_ticks));
+      (Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(Price(50_ticks)));
 
   risk_aware_order >> LiveExchange;
 }
@@ -260,9 +269,30 @@ void arbitrage_strategy() {
 
   arb_logic >> LiveExchange;
 
-  std::cout << "Arb Check: Kalshi BTC (" << kalshi.get_price("BTC"_mkt, true)
-            << ") vs Polymarket BTC (" << polymarket.get_price("BTC"_mkt, true)
-            << ")" << std::endl;
+  std::cout << "Arb Check: Kalshi BTC ("
+            << kalshi.get_price("BTC"_mkt, true).raw << ") vs Polymarket BTC ("
+            << polymarket.get_price("BTC"_mkt, true).raw << ")" << std::endl;
+}
+
+void auth_demo() {
+  std::cout << "\nRunning Authentication Demo...\n";
+
+  using namespace bop::exchanges;
+
+  // Set Kalshi Credentials
+  const_cast<Kalshi &>(kalshi).credentials = {"my_api_key", "my_secret_key",
+                                              "my_passphrase", ""};
+
+  std::string k_sign = kalshi.sign_request("GET", "/v2/exchange/status");
+  std::cout << "Kalshi Signature: " << k_sign << std::endl;
+
+  // Set Polymarket Credentials
+  const_cast<Polymarket &>(polymarket).credentials = {"", "0x_my_private_key",
+                                                      "", "0x_my_address"};
+
+  std::string p_sign =
+      polymarket.sign_request("POST", "/orders", "{\"qty\":10}");
+  std::cout << "Polymarket Signature: " << p_sign << std::endl;
 }
 
 int main() {
@@ -270,5 +300,6 @@ int main() {
   risk_aware_strategy();
   pro_strategy();
   arbitrage_strategy();
+  auth_demo();
   return 0;
 }
