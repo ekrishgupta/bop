@@ -1,6 +1,9 @@
 #pragma once
 
+#include "auth.hpp"
 #include "core.hpp"
+#include "nlohmann/json.hpp"
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -9,7 +12,7 @@ namespace bop {
 
 // Supporting Data Structures for Exhaustive API Coverage
 struct OrderBookLevel {
-  int64_t price;
+  Price price;
   int64_t quantity;
 };
 
@@ -20,23 +23,25 @@ struct OrderBook {
 
 struct Candlestick {
   int64_t timestamp;
-  int64_t open;
-  int64_t high;
-  int64_t low;
-  int64_t close;
+  Price open;
+  Price high;
+  Price low;
+  Price close;
   int64_t volume;
 };
 
 struct PortfolioSummary {
-  int64_t balance;
-  int64_t initial_margin;
-  int64_t maintenance_margin;
-  int64_t portfolio_value;
+  Price balance;
+  Price initial_margin;
+  Price maintenance_margin;
+  Price portfolio_value;
 };
 
 struct MarketBackend {
   virtual ~MarketBackend() = default;
   virtual std::string name() const = 0;
+
+  auth::Credentials credentials;
 
   // --- Exchange & Status ---
   virtual std::string get_exchange_status() const { return "active"; }
@@ -48,8 +53,8 @@ struct MarketBackend {
   virtual int64_t clob_get_server_time() const { return 0; }
 
   // --- Market Data (Live) ---
-  virtual int64_t get_price(MarketId market, bool outcome_yes) const = 0;
-  virtual int64_t get_depth(MarketId market, bool is_bid) const = 0;
+  virtual Price get_price(MarketId market, bool outcome_yes) const = 0;
+  virtual Price get_depth(MarketId market, bool is_bid) const = 0;
   virtual OrderBook get_orderbook(MarketId market) const { return {}; }
   virtual std::vector<Candlestick> get_candlesticks(MarketId market) const {
     return {};
@@ -66,11 +71,13 @@ struct MarketBackend {
   virtual std::string gamma_get_market(const std::string &id) const {
     return "";
   }
-  virtual int64_t clob_get_midpoint(MarketId market) const { return 0; }
-  virtual int64_t clob_get_spread(MarketId market) const { return 0; }
-  virtual int64_t clob_get_last_trade_price(MarketId market) const { return 0; }
+  virtual Price clob_get_midpoint(MarketId market) const { return Price(0); }
+  virtual Price clob_get_spread(MarketId market) const { return Price(0); }
+  virtual Price clob_get_last_trade_price(MarketId market) const {
+    return Price(0);
+  }
   virtual double clob_get_fee_rate(MarketId market) const { return 0.0; }
-  virtual double clob_get_tick_size(MarketId market) const { return 0.0; }
+  virtual Price clob_get_tick_size(MarketId market) const { return Price(0); }
 
   // --- Historical Data ---
   virtual std::string get_historical_cutoff() const { return ""; }
@@ -99,9 +106,9 @@ struct MarketBackend {
   }
 
   // --- Portfolio & Subaccounts ---
-  virtual int64_t get_balance() const { return 0; }
+  virtual Price get_balance() const { return Price(0); }
   virtual PortfolioSummary get_portfolio_summary() const {
-    return {0, 0, 0, 0};
+    return {Price(0), Price(0), Price(0), Price(0)};
   }
   virtual std::string get_positions() const { return ""; }
   virtual std::string get_fills() const { return ""; }
@@ -111,7 +118,7 @@ struct MarketBackend {
     return "";
   }
   virtual bool transfer_funds(const std::string &from, const std::string &to,
-                              int64_t amount) const {
+                              Price amount) const {
     return true;
   }
   virtual std::string get_subaccount_balances() const { return ""; }
@@ -121,13 +128,22 @@ struct MarketBackend {
   virtual std::vector<std::string> list_api_keys() const { return {}; }
   virtual bool create_api_key() const { return true; }
   virtual bool delete_api_key(const std::string &key_id) const { return true; }
-  virtual bool create_withdrawal(int64_t amount,
+  virtual bool create_withdrawal(Price amount,
                                  const std::string &method) const {
     return true;
   }
-  virtual bool create_deposit(int64_t amount, const std::string &method) const {
+  virtual bool create_deposit(Price amount, const std::string &method) const {
     return true;
   }
+
+  // --- WebSocket Streaming ---
+  virtual void ws_subscribe_orderbook(
+      MarketId market, std::function<void(const OrderBook &)> callback) const {}
+  virtual void
+  ws_subscribe_trades(MarketId market,
+                      std::function<void(bop::Price, int64_t)> callback) const {
+  }
+  virtual void ws_unsubscribe(MarketId market) const {}
 };
 
 } // namespace bop

@@ -19,20 +19,38 @@ struct Kalshi : public MarketBackend {
   std::string get_exchange_schedule() const override { return "24/7"; }
 
   // --- Market Data ---
-  int64_t get_price(MarketId, bool) const override {
-    return 50; // Mock: prices are 1-99 cents in Kalshi
+  Price get_price(MarketId market, bool outcome_yes) const override {
+    std::string url =
+        std::string("https://api.elections.kalshi.com/trade-api/v2/markets/") +
+        market.ticker;
+    try {
+      auto resp = Network.get(url);
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        // Kalshi V2 returns { "market": { "last_price": 50, ... } }
+        int64_t cents = j["market"]["last_price"].get<int64_t>();
+        if (!outcome_yes)
+          cents = 100 - cents;
+        return Price::from_cents(cents);
+      }
+    } catch (...) {
+      // Fallback or error handling
+    }
+    return Price::from_cents(50); // Mock fallback
   }
 
-  int64_t get_depth(MarketId, bool) const override {
-    return 2; // Mock: spread in cents
+  Price get_depth(MarketId, bool) const override {
+    return Price::from_cents(2); // Mock: spread in cents
   }
 
   OrderBook get_orderbook(MarketId) const override {
-    return {{{50, 100}}, {{51, 100}}}; // Mock L2
+    return {{{Price::from_cents(50), 100}},
+            {{Price::from_cents(51), 100}}}; // Mock L2
   }
 
   std::vector<Candlestick> get_candlesticks(MarketId) const override {
-    return {{0, 50, 55, 45, 52, 1000}}; // Mock OHLCV
+    return {{0, Price::from_cents(50), Price::from_cents(55),
+             Price::from_cents(45), Price::from_cents(52), 1000}}; // Mock OHLCV
   }
 
   // --- Historical ---
@@ -47,14 +65,46 @@ struct Kalshi : public MarketBackend {
   bool cancel_order(const std::string &) const override { return true; }
 
   // --- Portfolio ---
-  int64_t get_balance() const override { return 100000; }
+  Price get_balance() const override { return Price(100000); }
   PortfolioSummary get_portfolio_summary() const override {
-    return {100000, 5000, 2000, 105000};
+    return {Price(100000), Price(5000), Price(2000), Price(105000)};
   }
 
   // Cent-pricing validator
   static constexpr bool is_valid_price(int64_t cents) {
     return cents >= 1 && cents <= 99;
+  }
+
+  // --- WebSocket Streaming ---
+  void ws_subscribe_orderbook(
+      MarketId market,
+      std::function<void(const OrderBook &)> callback) const override {
+    std::cout << "[KALSHI] WS Subscribe Orderbook: " << market.hash
+              << std::endl;
+    // In a real implementation, this would send a subscription message to
+    // Kalshi WS API and route incoming messages to the callback.
+  }
+
+  void ws_subscribe_trades(
+      MarketId market,
+      std::function<void(Price, int64_t)> callback) const override {
+    std::cout << "[KALSHI] WS Subscribe Trades: " << market.hash << std::endl;
+  }
+
+  void ws_unsubscribe(MarketId market) const override {
+    std::cout << "[KALSHI] WS Unsubscribe: " << market.hash << std::endl;
+  }
+
+  // Authentication
+  std::string sign_request(const std::string &method, const std::string &path,
+                           const std::string &body = "") const {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  now.time_since_epoch())
+                  .count();
+    std::string timestamp = std::to_string(ms);
+    return auth::KalshiSigner::sign(credentials.secret_key, timestamp, method,
+                                    path, body);
   }
 };
 
