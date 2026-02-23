@@ -71,7 +71,7 @@ struct Kalshi : public MarketBackend {
   }
 
   // Cent-pricing validator
-  static constexpr bool is_valid_price(int64_t cents) {
+  static bool is_valid_price(int64_t cents) {
     return cents >= 1 && cents <= 99;
   }
 
@@ -108,11 +108,9 @@ struct Kalshi : public MarketBackend {
   }
 };
 
-static const Kalshi kalshi;
+static Kalshi kalshi;
 
 // Helper for Kalshi-specific tickers
-constexpr MarketTarget KalshiTicker(const char *ticker) {
-  return Market(ticker, kalshi);
-}
+MarketTarget KalshiTicker(const char *ticker) { return Market(ticker, kalshi); }
 
 } // namespace bop::exchanges

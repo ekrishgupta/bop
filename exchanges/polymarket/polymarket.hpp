@@ -120,11 +120,9 @@ struct Polymarket : public MarketBackend {
   }
 };
 
-static const Polymarket polymarket;
+static Polymarket polymarket;
 
 // Helper for Polymarket-specific targets
-constexpr MarketTarget PolyMarket(const char *id) {
-  return Market(id, polymarket);
-}
+MarketTarget PolyMarket(const char *id) { return Market(id, polymarket); }
 
 } // namespace bop::exchanges

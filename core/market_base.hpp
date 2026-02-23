@@ -43,6 +43,8 @@ struct MarketBackend {
 
   auth::Credentials credentials;
 
+  void set_credentials(const auth::Credentials &creds) { credentials = creds; }
+
   // --- Exchange & Status ---
   virtual std::string get_exchange_status() const { return "active"; }
   virtual std::string get_exchange_schedule() const { return "24/7"; }
