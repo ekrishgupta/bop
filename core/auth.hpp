@@ -287,6 +287,61 @@ struct PolySigner {
     // 4. ECDSA Sign
     return eth::sign_hash(private_key_hex, finalHash);
   }
+
+  static std::string sign_order(const std::string &private_key_hex,
+                                const std::string &address_hex,
+                                const std::string &token_id,
+                                const std::string &price,
+                                const std::string &size, const std::string &side,
+                                const std::string &expiration,
+                                uint64_t nonce) {
+    // EIP-712 Domain Separator for Polymarket Order
+    std::string typeHash_Domain =
+        keccak::hash("EIP712Domain(string name,string version,uint256 chainId)");
+    std::string nameHash = keccak::hash("ClobOrder");
+    std::string versionHash = keccak::hash("1");
+    std::string chainId = encode_uint256(137);
+    std::string domainSeparator =
+        keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
+
+    // Order Struct Hash
+    // keccak256("Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 side,uint256 expiration,uint256 nonce)")
+    std::string typeHash_Order = keccak::hash(
+        "Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 side,uint256 expiration,uint256 nonce)");
+
+    std::string ownerEncoded = encode_address(address_hex);
+    // Polymarket token_id, price, size are uint256 in the struct
+    // We assume they are passed as strings representing the decimal value
+    // For simplicity, we'll use a helper to convert decimal string to 32-byte BE
+    auto dec_to_bin = [](std::string s) {
+      // Very crude decimal to binary for large numbers
+      // In a real implementation, use BIGNUM
+      BIGNUM *bn = nullptr;
+      BN_dec2bn(&bn, s.c_str());
+      std::string res(32, '\0');
+      BN_bn2binpad(bn, reinterpret_cast<unsigned char *>(res.data()), 32);
+      BN_free(bn);
+      return res;
+    };
+
+    std::string tokenEncoded = dec_to_bin(token_id);
+    std::string priceEncoded = dec_to_bin(price);
+    std::string sizeEncoded = dec_to_bin(size);
+    std::string sideEncoded(32, '\0');
+    sideEncoded[31] = (side == "BUY" ? 0 : 1);
+    std::string expEncoded = dec_to_bin(expiration);
+    std::string nonceEncoded = encode_uint256(nonce);
+
+    std::string structHash =
+        keccak::hash(typeHash_Order + ownerEncoded + tokenEncoded +
+                     priceEncoded + sizeEncoded + sideEncoded + expEncoded +
+                     nonceEncoded);
+
+    std::string finalHash =
+        keccak::hash("\x19\x01" + domainSeparator + structHash);
+
+    return eth::sign_hash(private_key_hex, finalHash);
+  }
 };
 
 } // namespace bop::auth

@@ -159,7 +159,9 @@ struct Polymarket : public StreamingMarketBackend {
         1000000000);
     j["owner"] = credentials.address;
     j["nonce"] = 0;
-    j["signature"] = sign_request("POST", path, j.dump());
+    j["signature"] = auth::PolySigner::sign_order(
+        credentials.secret_key, credentials.address, j["token_id"], j["price"],
+        j["size"], j["side"], j["expiration"], j["nonce"]);
 
     std::string body = j.dump();
     try {
