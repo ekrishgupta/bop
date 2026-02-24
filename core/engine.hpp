@@ -333,12 +333,45 @@ struct ExecutionEngine {
     return Price(0);
   }
 
+  virtual Price get_universal_depth(MarketId super_ticker, bool is_bid) const {
+    const auto* super = MarketRegistry::Get(super_ticker.ticker);
+    if (!super) return get_depth(super_ticker, is_bid);
+
+    Price best_price(0);
+    for (const auto& entry : super->entries) {
+        Price p = entry.backend->get_depth(entry.market, is_bid);
+        if (p.raw > 0) {
+            if (best_price.raw == 0 || (is_bid ? p > best_price : p < best_price)) {
+                best_price = p;
+            }
+        }
+    }
+    return best_price;
+  }
+
   virtual Price get_price(MarketId market, bool outcome_yes) const {
     for (auto b : backends_) {
         Price p = b->get_price(market, outcome_yes);
         if (p.raw > 0) return p;
     }
     return Price(0);
+  }
+
+  virtual Price get_universal_price(MarketId super_ticker, bool outcome_yes) const {
+    const auto* super = MarketRegistry::Get(super_ticker.ticker);
+    if (!super) return get_price(super_ticker, outcome_yes);
+
+    Price best_price(0);
+    for (const auto& entry : super->entries) {
+        Price p = entry.backend->get_price(entry.market, outcome_yes);
+        if (p.raw > 0) {
+            // For universal pricing, we return the "best" price (lowest for buying YES)
+            if (best_price.raw == 0 || p < best_price) {
+                best_price = p;
+            }
+        }
+    }
+    return best_price;
   }
 
   virtual int64_t get_volume(MarketId market) const { 
@@ -417,17 +450,22 @@ inline bool Condition<Tag, Q>::eval() const {
   } else if constexpr (std::is_same_v<Tag, PnLTag>) {
     Price val = LiveExchange.get_pnl();
     return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, PriceTag>) {
-    Price val = query.backend
-                    ? query.backend->get_price(query.market, query.outcome_yes)
-                    : LiveExchange.get_price(query.market, query.outcome_yes);
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, DepthTag>) {
-    Price val = query.backend
-                    ? query.backend->get_depth(query.market, query.outcome_yes)
-                    : LiveExchange.get_depth(query.market, query.outcome_yes);
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
+    } else if constexpr (std::is_same_v<Tag, PriceTag>) {
+      Price val = query.is_universal 
+                      ? LiveExchange.get_universal_price(query.market, query.outcome_yes)
+                      : (query.backend
+                          ? query.backend->get_price(query.market, query.outcome_yes)
+                          : LiveExchange.get_price(query.market, query.outcome_yes));
+      return is_greater ? val.raw > threshold : val.raw < threshold;
+    } else if constexpr (std::is_same_v<Tag, DepthTag>) {
+      Price val = query.is_universal
+                      ? LiveExchange.get_universal_depth(query.market, query.outcome_yes)
+                      : (query.backend
+                          ? query.backend->get_depth(query.market, query.outcome_yes)
+                          : LiveExchange.get_depth(query.market, query.outcome_yes));
+      return is_greater ? val.raw > threshold : val.raw < threshold;
+    }
+   else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
     size_t val = LiveExchange.get_open_order_count(query.market);
     return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
   } else if constexpr (std::is_same_v<Tag, PortfolioTag>) {
