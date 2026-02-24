@@ -91,28 +91,38 @@ struct Kalshi : public StreamingMarketBackend {
 
   void handle_message(const std::string &msg) override {
     try {
-      auto j = json::parse(msg);
-      if (!j.contains("type")) return;
+      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      std::string_view type;
+      auto error = doc["type"].get(type);
+      if (error) return;
 
-      std::string type = j["type"];
       if (type == "ticker") {
-        std::string ticker = j["msg"]["market_ticker"];
-        int64_t last_price = j["msg"]["last_price"];
-        update_price(MarketId(ticker.c_str()), Price::from_cents(last_price),
-                     Price::from_cents(100 - last_price));
+        auto m = doc["msg"];
+        std::string_view ticker;
+        int64_t last_price;
+        if (!m["market_ticker"].get(ticker) && !m["last_price"].get(last_price)) {
+            update_price(MarketId(std::string(ticker).c_str()), Price::from_cents(last_price),
+                         Price::from_cents(100 - last_price));
+        }
       } else if (type == "fill") {
-        std::string order_id = j["msg"]["order_id"];
-        int qty = j["msg"]["count"];
-        Price price = Price::from_cents(j["msg"]["price"]);
-        notify_fill(order_id, qty, price);
+        auto m = doc["msg"];
+        std::string_view order_id;
+        int64_t qty;
+        int64_t price_cents;
+        if (!m["order_id"].get(order_id) && !m["count"].get(qty) && !m["price"].get(price_cents)) {
+            notify_fill(std::string(order_id), static_cast<int>(qty), Price::from_cents(price_cents));
+        }
       } else if (type == "order_status_change") {
-        std::string order_id = j["msg"]["order_id"];
-        std::string status_str = j["msg"]["status"];
-        OrderStatus status = OrderStatus::Open;
-        if (status_str == "canceled") status = OrderStatus::Cancelled;
-        else if (status_str == "rejected") status = OrderStatus::Rejected;
-        else if (status_str == "filled") status = OrderStatus::Filled;
-        notify_status(order_id, status);
+        auto m = doc["msg"];
+        std::string_view order_id;
+        std::string_view status_str;
+        if (!m["order_id"].get(order_id) && !m["status"].get(status_str)) {
+            OrderStatus status = OrderStatus::Open;
+            if (status_str == "canceled") status = OrderStatus::Cancelled;
+            else if (status_str == "rejected") status = OrderStatus::Rejected;
+            else if (status_str == "filled") status = OrderStatus::Filled;
+            notify_status(std::string(order_id), status);
+        }
       }
     } catch (...) {
     }
