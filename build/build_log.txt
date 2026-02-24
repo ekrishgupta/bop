@@ -1,0 +1,341 @@
+[ 25%] Built target simdjson
+[ 75%] Built target bop_core
+[ 87%] Building CXX object CMakeFiles/main.dir/main.cpp.o
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:221:19: warning: 'EC_KEY_new_by_curve_name' is deprecated [-Wdeprecated-declarations]
+  221 |     EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+      |                   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1009:1: note: 'EC_KEY_new_by_curve_name' has been explicitly marked deprecated here
+ 1009 | OSSL_DEPRECATEDIN_3_0 EC_KEY *EC_KEY_new_by_curve_name(int nid);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:222:29: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  222 |     const EC_GROUP *group = EC_KEY_get0_group(key);
+      |                             ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:238:5: warning: 'EC_KEY_free' is deprecated [-Wdeprecated-declarations]
+  238 |     EC_KEY_free(key);
+      |     ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1014:1: note: 'EC_KEY_free' has been explicitly marked deprecated here
+ 1014 | OSSL_DEPRECATEDIN_3_0 void EC_KEY_free(EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:247:17: warning: 'EC_KEY_new_by_curve_name' is deprecated [-Wdeprecated-declarations]
+  247 |   EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+      |                 ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1009:1: note: 'EC_KEY_new_by_curve_name' has been explicitly marked deprecated here
+ 1009 | OSSL_DEPRECATEDIN_3_0 EC_KEY *EC_KEY_new_by_curve_name(int nid);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:248:3: warning: 'EC_KEY_set_private_key' is deprecated [-Wdeprecated-declarations]
+  248 |   EC_KEY_set_private_key(key, priv_bn);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1067:1: note: 'EC_KEY_set_private_key' has been explicitly marked deprecated here
+ 1067 | OSSL_DEPRECATEDIN_3_0 int EC_KEY_set_private_key(EC_KEY *key, const BIGNUM *prv);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:250:38: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  250 |   EC_POINT *pub_point = EC_POINT_new(EC_KEY_get0_group(key));
+      |                                      ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:251:16: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  251 |   EC_POINT_mul(EC_KEY_get0_group(key), pub_point, priv_bn, nullptr, nullptr,
+      |                ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:253:3: warning: 'EC_KEY_set_public_key' is deprecated [-Wdeprecated-declarations]
+  253 |   EC_KEY_set_public_key(key, pub_point);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1081:1: note: 'EC_KEY_set_public_key' has been explicitly marked deprecated here
+ 1081 | OSSL_DEPRECATEDIN_3_0 int EC_KEY_set_public_key(EC_KEY *key, const EC_POINT *pub);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:255:20: warning: 'ECDSA_do_sign' is deprecated [-Wdeprecated-declarations]
+  255 |   ECDSA_SIG *sig = ECDSA_do_sign(
+      |                    ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1376:1: note: 'ECDSA_do_sign' has been explicitly marked deprecated here
+ 1376 | OSSL_DEPRECATEDIN_3_0 ECDSA_SIG *ECDSA_do_sign(const unsigned char *dgst,
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:263:22: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  263 |   EC_GROUP_get_order(EC_KEY_get0_group(key), order, nullptr);
+      |                      ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/bop.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/algo_manager.hpp:3:
+In file included from /Users/krishgupta/Projects/bop/core/algo.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:285:3: warning: 'EC_KEY_free' is deprecated [-Wdeprecated-declarations]
+  285 |   EC_KEY_free(key);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1014:1: note: 'EC_KEY_free' has been explicitly marked deprecated here
+ 1014 | OSSL_DEPRECATEDIN_3_0 void EC_KEY_free(EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:2:
+/Users/krishgupta/Projects/bop/exchanges/kalshi/kalshi.hpp:94:7: error: use of undeclared identifier 'simdjson'
+   94 |       simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      |       ^
+/Users/krishgupta/Projects/bop/exchanges/kalshi/kalshi.hpp:94:42: error: use of undeclared identifier 'parser_'
+   94 |       simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      |                                          ^
+In file included from /Users/krishgupta/Projects/bop/main.cpp:3:
+/Users/krishgupta/Projects/bop/exchanges/polymarket/polymarket.hpp:111:7: error: use of undeclared identifier 'simdjson'
+  111 |       simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      |       ^
+/Users/krishgupta/Projects/bop/exchanges/polymarket/polymarket.hpp:111:42: error: use of undeclared identifier 'parser_'
+  111 |       simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      |                                          ^
+/Users/krishgupta/Projects/bop/exchanges/polymarket/polymarket.hpp:147:25: error: use of undeclared identifier 'simdjson'
+  147 |       if (doc.type() == simdjson::ondemand::json_type::array) {
+      |                         ^
+/Users/krishgupta/Projects/bop/main.cpp:51:15: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+   51 |   trade_limit >> LiveExchange;
+      |   ~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:52:16: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+   52 |   trade_market >> LiveExchange;
+      |   ~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:94:16: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+   94 |   trade_pegged >> LiveExchange;
+      |   ~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:127:14: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  127 |   trade_twap >> LiveExchange;
+      |   ~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:128:14: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  128 |   trade_vwap >> LiveExchange;
+      |   ~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:160:17: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  160 |   trade_bracket >> LiveExchange;
+      |   ~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:177:13: error: use of overloaded operator '>>' is ambiguous (with operand types 'OCOOrder' and 'ExecutionEngine')
+  177 |   oco_order >> LiveExchange;
+      |   ~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:329:6: note: candidate function
+  329 | void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:488:13: note: candidate function
+  488 | inline void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:202:13: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  202 |   trade_stp >> LiveExchange;
+      |   ~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:203:20: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  203 |   trade_stp_custom >> LiveExchange;
+      |   ~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:216:67: error: use of overloaded operator '>>' is ambiguous (with operand types 'std::initializer_list<Order>' and 'ExecutionEngine')
+  214 |   Batch(
+      |   ~~~~~~
+  215 |       {Buy(100_shares) / "MarsLanding"_mkt / YES + LimitPrice(Price(50_ticks)),
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  216 |        Sell(50_shares) / "MarsLanding"_mkt / NO + MarketPrice()}) >>
+      |        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^
+  217 |       LiveExchange;
+      |       ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:328:6: note: candidate function
+  328 | void operator>>(std::initializer_list<bop::Order> batch, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:460:13: note: candidate function
+  460 | inline void operator>>(std::initializer_list<bop::Order> batch,
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:248:16: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  248 |   spread_trade >> LiveExchange;
+      |   ~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+/Users/krishgupta/Projects/bop/main.cpp:297:10: error: no member named 'load_markets' in 'bop::exchanges::Kalshi'; did you mean 'sync_markets'?
+  297 |   kalshi.load_markets();
+      |          ^~~~~~~~~~~~
+      |          sync_markets
+/Users/krishgupta/Projects/bop/exchanges/kalshi/kalshi.hpp:16:8: note: 'sync_markets' declared here
+   16 |   void sync_markets() override {
+      |        ^
+/Users/krishgupta/Projects/bop/main.cpp:298:14: error: no member named 'load_markets' in 'bop::exchanges::Polymarket'; did you mean 'sync_markets'?
+  298 |   polymarket.load_markets();
+      |              ^~~~~~~~~~~~
+      |              sync_markets
+/Users/krishgupta/Projects/bop/exchanges/polymarket/polymarket.hpp:16:8: note: 'sync_markets' declared here
+   16 |   void sync_markets() override {
+      |        ^
+/Users/krishgupta/Projects/bop/main.cpp:313:14: error: use of overloaded operator '>>' is ambiguous (with operand types 'Order' and 'ExecutionEngine')
+  313 |   twap_order >> LiveExchange;
+      |   ~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/engine.hpp:327:6: note: candidate function
+  327 | void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
+      |      ^
+/Users/krishgupta/Projects/bop/core/engine.hpp:409:13: note: candidate function
+  409 | inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+      |             ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+11 warnings and 20 errors generated.
+make[3]: *** [CMakeFiles/main.dir/main.cpp.o] Error 1
+make[2]: *** [CMakeFiles/main.dir/all] Error 2
+make[1]: *** [CMakeFiles/main.dir/rule] Error 2
+make: *** [main] Error 2

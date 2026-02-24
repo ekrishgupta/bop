@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.hpp"
+#include "order_tracker.hpp"
 #include <sqlite3.h>
 #include <string>
 #include <mutex>

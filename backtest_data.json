@@ -1,0 +1,4 @@
+[
+  {"timestamp": 1700000000, "ticker": "TSLA", "yes_price": 0.80, "no_price": 0.20},
+  {"timestamp": 1700000001, "ticker": "TSLA", "yes_price": 0.70, "no_price": 0.30}
+]

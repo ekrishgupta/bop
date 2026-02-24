@@ -24,18 +24,18 @@ struct RiskQuery {
   Type type;
 };
 
+struct BalanceQuery {};
+struct PortfolioQuery {
+  enum class Metric { TotalDelta, TotalGamma, TotalTheta, TotalVega, NetExposure, PortfolioValue };
+  Metric metric;
+};
+
 template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
   const MarketBackend *backend = nullptr;
 
   inline MarketQuery<Tag> count() const { return *this; }
-};
-
-struct BalanceQuery {};
-struct PortfolioQuery {
-  enum class Metric { TotalDelta, TotalGamma, TotalTheta, TotalVega, NetExposure, PortfolioValue };
-  Metric metric;
 };
 
 // Forward declaration of composite conditions
@@ -426,11 +426,11 @@ inline WhenBinder<TimeTrigger> At(const std::string& iso_time) {
 }
 
 inline Condition<PortfolioTag, PortfolioQuery> operator>(PortfolioMetricProxy p, double threshold) {
-  return {{p.metric}, static_cast<int64_t>(threshold * 1000000), true}; // Scaled by 1e6 for precision in int64
+  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000), true}; 
 }
 
 inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p, double threshold) {
-  return {{p.metric}, static_cast<int64_t>(threshold * 1000000), false};
+  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000), false};
 }
 
 // Exposure/PnL comparisons

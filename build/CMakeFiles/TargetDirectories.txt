@@ -1,0 +1,16 @@
+/Users/krishgupta/Projects/bop/build/CMakeFiles/bop_core.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/main.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/backtest_example.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/edit_cache.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/rebuild_cache.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/list_install_components.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/install.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/install/local.dir
+/Users/krishgupta/Projects/bop/build/CMakeFiles/install/strip.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/simdjson.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/edit_cache.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/rebuild_cache.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/list_install_components.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/install.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/install/local.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-build/CMakeFiles/install/strip.dir

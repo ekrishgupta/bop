@@ -1,0 +1,3 @@
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-subbuild/CMakeFiles/simdjson-populate.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-subbuild/CMakeFiles/edit_cache.dir
+/Users/krishgupta/Projects/bop/build/_deps/simdjson-subbuild/CMakeFiles/rebuild_cache.dir

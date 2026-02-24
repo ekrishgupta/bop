@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/krishgupta/Projects/bop/build/_deps/simdjson-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

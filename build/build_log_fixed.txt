@@ -1,0 +1,199 @@
+[ 25%] Built target simdjson
+[ 37%] Building CXX object CMakeFiles/bop_core.dir/core/impl.cpp.o
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:221:19: warning: 'EC_KEY_new_by_curve_name' is deprecated [-Wdeprecated-declarations]
+  221 |     EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+      |                   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1009:1: note: 'EC_KEY_new_by_curve_name' has been explicitly marked deprecated here
+ 1009 | OSSL_DEPRECATEDIN_3_0 EC_KEY *EC_KEY_new_by_curve_name(int nid);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:222:29: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  222 |     const EC_GROUP *group = EC_KEY_get0_group(key);
+      |                             ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:238:5: warning: 'EC_KEY_free' is deprecated [-Wdeprecated-declarations]
+  238 |     EC_KEY_free(key);
+      |     ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1014:1: note: 'EC_KEY_free' has been explicitly marked deprecated here
+ 1014 | OSSL_DEPRECATEDIN_3_0 void EC_KEY_free(EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:247:17: warning: 'EC_KEY_new_by_curve_name' is deprecated [-Wdeprecated-declarations]
+  247 |   EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+      |                 ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1009:1: note: 'EC_KEY_new_by_curve_name' has been explicitly marked deprecated here
+ 1009 | OSSL_DEPRECATEDIN_3_0 EC_KEY *EC_KEY_new_by_curve_name(int nid);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:248:3: warning: 'EC_KEY_set_private_key' is deprecated [-Wdeprecated-declarations]
+  248 |   EC_KEY_set_private_key(key, priv_bn);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1067:1: note: 'EC_KEY_set_private_key' has been explicitly marked deprecated here
+ 1067 | OSSL_DEPRECATEDIN_3_0 int EC_KEY_set_private_key(EC_KEY *key, const BIGNUM *prv);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:250:38: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  250 |   EC_POINT *pub_point = EC_POINT_new(EC_KEY_get0_group(key));
+      |                                      ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:251:16: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  251 |   EC_POINT_mul(EC_KEY_get0_group(key), pub_point, priv_bn, nullptr, nullptr,
+      |                ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:253:3: warning: 'EC_KEY_set_public_key' is deprecated [-Wdeprecated-declarations]
+  253 |   EC_KEY_set_public_key(key, pub_point);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1081:1: note: 'EC_KEY_set_public_key' has been explicitly marked deprecated here
+ 1081 | OSSL_DEPRECATEDIN_3_0 int EC_KEY_set_public_key(EC_KEY *key, const EC_POINT *pub);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:255:20: warning: 'ECDSA_do_sign' is deprecated [-Wdeprecated-declarations]
+  255 |   ECDSA_SIG *sig = ECDSA_do_sign(
+      |                    ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1376:1: note: 'ECDSA_do_sign' has been explicitly marked deprecated here
+ 1376 | OSSL_DEPRECATEDIN_3_0 ECDSA_SIG *ECDSA_do_sign(const unsigned char *dgst,
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:263:22: warning: 'EC_KEY_get0_group' is deprecated [-Wdeprecated-declarations]
+  263 |   EC_GROUP_get_order(EC_KEY_get0_group(key), order, nullptr);
+      |                      ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1045:1: note: 'EC_KEY_get0_group' has been explicitly marked deprecated here
+ 1045 | OSSL_DEPRECATEDIN_3_0 const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+In file included from /Users/krishgupta/Projects/bop/core/impl.cpp:1:
+In file included from /Users/krishgupta/Projects/bop/core/engine.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/logic.hpp:4:
+In file included from /Users/krishgupta/Projects/bop/core/market_base.hpp:3:
+/Users/krishgupta/Projects/bop/core/auth.hpp:285:3: warning: 'EC_KEY_free' is deprecated [-Wdeprecated-declarations]
+  285 |   EC_KEY_free(key);
+      |   ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/ec.h:1014:1: note: 'EC_KEY_free' has been explicitly marked deprecated here
+ 1014 | OSSL_DEPRECATEDIN_3_0 void EC_KEY_free(EC_KEY *key);
+      | ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:228:31: note: expanded from macro 'OSSL_DEPRECATEDIN_3_0'
+  228 | #define OSSL_DEPRECATEDIN_3_0 OSSL_DEPRECATED(3.0)
+      |                               ^
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/macros.h:61:47: note: expanded from macro 'OSSL_DEPRECATED'
+   61 | #define OSSL_DEPRECATED(since) __attribute__((deprecated))
+      |                                               ^
+/Users/krishgupta/Projects/bop/core/impl.cpp:165:27: error: out-of-line definition of 'notify_status' does not match any declaration in 'bop::LiveExecutionEngine'
+  165 | void LiveExecutionEngine::notify_status(const std::string &id, OrderStatus status) {
+      |                           ^~~~~~~~~~~~~
+/Users/krishgupta/Projects/bop/core/impl.cpp:166:9: error: unknown type name 'engine_'; did you mean 'engine_st'?
+  166 |     if (engine_) {
+      |         ^~~~~~~
+      |         engine_st
+/opt/homebrew/Cellar/openssl@3/3.6.1/include/openssl/types.h:195:16: note: 'engine_st' declared here
+  195 | typedef struct engine_st ENGINE;
+      |                ^
+/Users/krishgupta/Projects/bop/core/impl.cpp:166:16: error: expected unqualified-id
+  166 |     if (engine_) {
+      |                ^
+/Users/krishgupta/Projects/bop/core/impl.cpp:167:9: error: use of undeclared identifier 'engine_'
+  167 |         engine_->update_order_status(id, status);
+      |         ^
+11 warnings and 4 errors generated.
+make[3]: *** [CMakeFiles/bop_core.dir/core/impl.cpp.o] Error 1
+make[2]: *** [CMakeFiles/bop_core.dir/all] Error 2
+make[1]: *** [CMakeFiles/main.dir/rule] Error 2
+make: *** [main] Error 2

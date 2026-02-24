@@ -1,0 +1,2 @@
+/usr/bin/ar qc libbop_core.a CMakeFiles/bop_core.dir/core/impl.cpp.o CMakeFiles/bop_core.dir/core/algo.cpp.o CMakeFiles/bop_core.dir/core/database.cpp.o
+/usr/bin/ranlib libbop_core.a
