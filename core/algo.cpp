@@ -168,9 +168,17 @@ bool VWAPAlgo::tick(ExecutionEngine &engine) {
         return true;
     }
 
+    int64_t now_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    
+    // Throttle volume checks to avoid too frequent slicing
+    if (last_slice_time_ns != 0 && (now_ns - last_slice_time_ns < 2e9)) {
+        return false;
+    }
+
     int64_t current_volume = engine.get_volume(parent_order.market);
     if (last_market_volume == -1) {
         last_market_volume = current_volume;
+        last_slice_time_ns = now_ns;
         return false;
     }
 
@@ -188,10 +196,11 @@ bool VWAPAlgo::tick(ExecutionEngine &engine) {
         slice.quantity = to_fill;
         slice.algo_type = AlgoType::None;
         if (slice.backend) {
-            std::cout << "[ALGO] VWAP Slice: " << to_fill << " shares" << std::endl;
+            std::cout << "[ALGO] VWAP Slice: " << to_fill << " shares (Market Delta: " << volume_delta << ", Rate: " << participation_rate * 100 << "%)" << std::endl;
             slice.backend->create_order(slice);
         }
         filled_qty += to_fill;
+        last_slice_time_ns = now_ns;
     }
 
     last_market_volume = current_volume;

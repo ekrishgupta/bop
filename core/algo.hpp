@@ -60,6 +60,7 @@ class VWAPAlgo : public ExecutionAlgo {
   int total_qty;
   int filled_qty = 0;
   int64_t last_market_volume = -1;
+  int64_t last_slice_time_ns = 0;
 
 public:
   VWAPAlgo(const Order &o);
