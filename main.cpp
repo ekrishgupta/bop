@@ -352,35 +352,62 @@ void streaming_demo() {
 
 int main() {
   using namespace bop::exchanges;
-  // Register backends for real-time tracking
+
+  std::cout << "--- BOP Production Strategy Engine ---" << std::endl;
+
+  // 1. Initialize Credentials and Backends
+  kalshi.set_credentials({"my_api_key", "my_secret_key", "my_passphrase", ""});
+  polymarket.set_credentials({"", "0x_my_private_key", "", "0x_my_address"});
+
+  // 2. Register backends with the Execution Engine
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
 
-  std::cout << "[MAIN] Synchronizing market data..." << std::endl;
-  RealLiveExchange.sync_all_markets();
+  // 3. Load Markets & Discover Mapping
+  std::cout << "[MAIN] Discovering markets..." << std::endl;
+  kalshi.load_markets();
+  polymarket.load_markets();
 
-  my_strategy();
-  risk_aware_strategy();
-  pro_strategy();
-  arbitrage_strategy();
-  auth_demo();
-  algo_logic_demo();
-  streaming_demo();
+  // 4. Define Persistent Strategies
+  std::cout << "[MAIN] Deploying strategies..." << std::endl;
 
-  std::cout << "\n[MAIN] Starting Global Execution Engine for 5 seconds..." << std::endl;
-  
-  // Start a thread to stop the engine after 5 seconds for demonstration purposes
+  // Strategy A: Cross-Market Arbitrage (Persistent)
+  auto arb_strategy =
+      When(Market("BTC", kalshi).Price(YES) <
+           Market("BTC", polymarket).Price(YES)) >>
+      (Buy(100_shares) / Market("BTC", kalshi) / YES + MarketPrice());
+  arb_strategy >> LiveExchange;
+
+  // Strategy B: Risk-Gated Market Making
+  auto risk_strategy =
+      When(Exposure() < 50000 && Market("ETH", polymarket).Spread() < 5_ticks) >>
+      (Buy(200_shares) / Market("ETH", polymarket) / YES +
+       Peg(Bid, Price(1_ticks)));
+  risk_strategy >> LiveExchange;
+
+  // Strategy C: Execution Algorithms (TWAP/VWAP)
+  auto twap_order =
+      Sell(5000_shares) / Market("BTC", kalshi) / NO + MarketPrice() |
+      TWAP(15_min);
+  twap_order >> LiveExchange;
+
+  std::cout << "[MAIN] Engine running with " << GlobalAlgoManager.active_count()
+            << " active strategies/algorithms." << std::endl;
+
+  // 5. Start Persistent Event Loop
+  // In a real production app, this would run indefinitely.
+  // For this demonstration, we run for 30 seconds to show responsiveness.
   std::thread stopper([]() {
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    std::cout << "\n[MAIN] Stopping engine..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(30));
+    std::cout << "\n[MAIN] 30s limit reached. Stopping engine..." << std::endl;
     LiveExchange.stop();
   });
 
   LiveExchange.run();
-  
-  if (stopper.joinable()) {
-    stopper.join();
-  }
 
+  if (stopper.joinable())
+    stopper.join();
+
+  std::cout << "[MAIN] Shutdown complete." << std::endl;
   return 0;
 }

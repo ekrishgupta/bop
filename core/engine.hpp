@@ -2,6 +2,8 @@
 
 #include "core.hpp"
 #include "logic.hpp"
+#include "order_tracker.hpp"
+#include "streaming_backend.hpp"
 #include <iostream>
 #include <atomic>
 #include <thread>
@@ -18,11 +20,16 @@ namespace bop {
 struct ExecutionEngine {
   std::atomic<bool> is_running{false};
   mutable std::vector<const MarketBackend *> backends_;
+  OrderTracker order_store;
 
   virtual ~ExecutionEngine() = default;
 
   void register_backend(const MarketBackend *backend) {
     backends_.push_back(backend);
+    auto streaming = dynamic_cast<const StreamingMarketBackend*>(backend);
+    if (streaming) {
+        const_cast<StreamingMarketBackend*>(streaming)->set_engine(this);
+    }
   }
 
   void sync_all_markets() {
@@ -30,6 +37,23 @@ struct ExecutionEngine {
       std::cout << "[ENGINE] Syncing markets for " << b->name() << "..." << std::endl;
       const_cast<MarketBackend *>(b)->sync_markets();
     }
+  }
+
+  // Order Tracking
+  void track_order(const std::string &id, const Order &o) {
+    order_store.track(id, o);
+  }
+
+  void update_order_status(const std::string &id, OrderStatus status) {
+    order_store.update_status(id, status);
+  }
+
+  void add_order_fill(const std::string &id, int qty, Price price) {
+    order_store.add_fill(id, qty, price);
+  }
+
+  std::vector<OrderRecord> get_orders() {
+    return order_store.get_all();
   }
 
   virtual int64_t get_position(MarketId market) const {
@@ -107,10 +131,24 @@ public:
       }
     });
 
-    std::cout << "[LIVE ENGINE] Starting event loop..." << std::endl;
+    std::cout << "[LIVE ENGINE] Starting high-frequency event loop..."
+              << std::endl;
     while (is_running) {
+      auto start = std::chrono::high_resolution_clock::now();
+
       GlobalAlgoManager.tick(*this);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      auto end = std::chrono::high_resolution_clock::now();
+      auto elapsed =
+          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count();
+
+      // Aim for ~1ms loop if possible, but don't busy-wait 100% if we are too
+      // fast
+      if (elapsed < 1000) {
+        std::this_thread::sleep_for(
+            std::chrono::microseconds(1000 - elapsed));
+      }
     }
   }
 
@@ -211,15 +249,21 @@ inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
   }
 
   if (o.backend) {
+    std::string id;
     if (o.is_spread) {
       std::cout << "[BACKEND] Dispatching spread order (" << o.market.hash
                 << " - " << o.market2.hash << ") to " << o.backend->name()
                 << " (" << latency << " ns latency)" << std::endl;
+      id = o.backend->create_order(o);
     } else {
       std::cout << "[BACKEND] Dispatching to " << o.backend->name() << " ("
                 << latency << " ns latency)" << std::endl;
+      id = o.backend->create_order(o);
     }
-    o.backend->create_order(o);
+    
+    if (!id.empty() && id != "error") {
+      engine.track_order(id, o);
+    }
   } else {
     if (o.is_spread) {
       std::cout << "[ENGINE] No backend bound for spread order ("
@@ -310,16 +354,28 @@ inline bool Condition<Tag, Q>::eval() const {
 } // namespace bop
 
 template <typename T>
+class PersistentConditionalStrategy : public ExecutionStrategy {
+  ConditionalOrder<T> co;
+
+public:
+  PersistentConditionalStrategy(const ConditionalOrder<T> &order) : co(order) {}
+  bool tick(ExecutionEngine &engine) override {
+    if (co.condition.eval()) {
+      std::cout << "[STRATEGY] Condition met! Triggering order..." << std::endl;
+      co.order >> engine;
+      return true; // Strategy completed
+    }
+    return false; // Continue monitoring
+  }
+};
+
+template <typename T>
 inline void operator>>(const bop::ConditionalOrder<T> &co,
                        bop::ExecutionEngine &engine) {
-  if (co.condition.eval()) {
-    std::cout << "[CONDITION] Passed conditional evaluation. Dispatching..."
-              << std::endl;
-    co.order >> engine;
-  } else {
-    std::cout << "[CONDITION] Failed conditional evaluation. Suppressing order."
-              << std::endl;
-  }
+  std::cout << "[STRATEGY] Registering persistent conditional order..."
+            << std::endl;
+  bop::GlobalAlgoManager.submit_strategy(
+      std::make_unique<bop::PersistentConditionalStrategy<T>>(co));
 }
 
 inline void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
