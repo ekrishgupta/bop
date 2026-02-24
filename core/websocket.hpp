@@ -254,4 +254,21 @@ private:
   std::function<void(const std::string &)> message_cb_;
 };
 
+/**
+ * @brief A WebSocket client that does nothing.
+ * Useful for exchanges that only support HTTP polling.
+ */
+class NullWebSocketClient : public WebSocketClient {
+public:
+  void connect(const std::string &) override {}
+  void disconnect() override {}
+  bool is_connected() const override { return false; }
+  void send(const std::string &) override {}
+  void on_open(std::function<void()>) override {}
+  void on_close(std::function<void()>) override {}
+  void on_error(std::function<void(const std::string &)>) override {}
+  void on_message(std::function<void(const std::string &)>) override {}
+  void subscribe(const std::string &, const std::vector<std::string> &) override {}
+};
+
 } // namespace bop
