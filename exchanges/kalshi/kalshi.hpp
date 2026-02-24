@@ -65,9 +65,23 @@ struct Kalshi : public MarketBackend {
   bool cancel_order(const std::string &) const override { return true; }
 
   // --- Portfolio ---
-  Price get_balance() const override { return Price(100000); }
+  Price get_balance() const override {
+    std::string path = "/v2/portfolio/balance";
+    std::string url = "https://api.elections.kalshi.com/trade-api" + path;
+    try {
+      auto resp = Network.get(url, auth_headers("GET", path));
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        // Kalshi returns balance in cents
+        return Price::from_cents(j["balance"].get<int64_t>());
+      }
+    } catch (...) {
+    }
+    return Price(0);
+  }
+
   PortfolioSummary get_portfolio_summary() const override {
-    return {Price(100000), Price(5000), Price(2000), Price(105000)};
+    return {get_balance(), Price(0), Price(0), Price(0)};
   }
 
   // Cent-pricing validator
@@ -81,8 +95,6 @@ struct Kalshi : public MarketBackend {
       std::function<void(const OrderBook &)> callback) const override {
     std::cout << "[KALSHI] WS Subscribe Orderbook: " << market.hash
               << std::endl;
-    // In a real implementation, this would send a subscription message to
-    // Kalshi WS API and route incoming messages to the callback.
   }
 
   void ws_subscribe_trades(
@@ -95,16 +107,27 @@ struct Kalshi : public MarketBackend {
     std::cout << "[KALSHI] WS Unsubscribe: " << market.hash << std::endl;
   }
 
-  // Authentication
-  std::string sign_request(const std::string &method, const std::string &path,
-                           const std::string &body = "") const {
+  // Authentication Helpers
+  std::map<std::string, std::string>
+  auth_headers(const std::string &method, const std::string &path,
+               const std::string &body = "") const {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                   now.time_since_epoch())
                   .count();
     std::string timestamp = std::to_string(ms);
-    return auth::KalshiSigner::sign(credentials.secret_key, timestamp, method,
-                                    path, body);
+    std::string signature = auth::KalshiSigner::sign(
+        credentials.secret_key, timestamp, method, path, body);
+
+    return {{"KALSHI-ACCESS-KEY", credentials.api_key},
+            {"KALSHI-ACCESS-SIGNATURE", signature},
+            {"KALSHI-ACCESS-TIMESTAMP", timestamp}};
+  }
+
+  std::string sign_request(const std::string &method, const std::string &path,
+                           const std::string &body = "") const {
+    auto headers = auth_headers(method, path, body);
+    return headers.at("KALSHI-ACCESS-SIGNATURE");
   }
 };
 
