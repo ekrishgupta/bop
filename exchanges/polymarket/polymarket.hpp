@@ -13,21 +13,66 @@ struct Polymarket : public StreamingMarketBackend {
 
   std::string name() const override { return "Polymarket"; }
 
+  void load_markets() override {
+    std::string url = "https://clob.polymarket.com/markets";
+    try {
+      auto resp = Network.get(url);
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        for (auto &m : j) {
+          if (!m.contains("active") || !m["active"].get<bool>())
+            continue;
+
+          std::string cond_id = m["condition_id"];
+          // Polymarket sometimes has a 'ticker' field in Gamma, but in CLOB it
+          // might be different. Let's use the question or a derived ticker if
+          // available. For now, we'll map condition_id to condition_id and also
+          // store tokens.
+          ticker_to_id[cond_id] = cond_id;
+
+          if (m.contains("tokens")) {
+            for (auto &t : m["tokens"]) {
+              std::string outcome = t["outcome"];
+              std::string token_id = t["token_id"];
+              // Store as ticker_YES or ticker_NO
+              if (outcome == "Yes") {
+                ticker_to_id[cond_id + "_YES"] = token_id;
+              } else if (outcome == "No") {
+                ticker_to_id[cond_id + "_NO"] = token_id;
+              }
+            }
+          }
+        }
+      }
+    } catch (...) {
+    }
+  }
+
+  std::string resolve_token_id(const MarketId &market, bool outcome_yes) const {
+    std::string key = market.ticker + (outcome_yes ? "_YES" : "_NO");
+    auto it = ticker_to_id.find(key);
+    if (it != ticker_to_id.end()) {
+      return it->second;
+    }
+    return market.ticker; // Fallback
+  }
+
   // --- Exchange Status & Metadata ---
   int64_t clob_get_server_time() const override { return 1709400000; }
 
   // --- Market Data (Live) ---
   Price get_price_http(MarketId market, bool outcome_yes) const override {
+    std::string token_id = resolve_token_id(market, outcome_yes);
     std::string url =
         std::string("https://clob.polymarket.com/last-trade-price?token_id=") +
-        market.ticker;
+        token_id;
     try {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
         auto j = resp.json_body();
         double price_val = std::stod(j["price"].get<std::string>());
-        if (!outcome_yes)
-          price_val = 1.0 - price_val;
+        // Polymarket last-trade-price is per-token, so no need to flip if
+        // outcome_no? Actually it depends on which token we queried.
         return Price::from_double(price_val);
       }
     } catch (...) {
@@ -52,7 +97,9 @@ struct Polymarket : public StreamingMarketBackend {
   void send_subscription(MarketId market) const override {
     json j;
     j["type"] = "subscribe";
-    j["token_ids"] = {market.ticker};
+    // Subscribe to both YES and NO tokens for the market
+    j["token_ids"] = {resolve_token_id(market, true),
+                      resolve_token_id(market, false)};
     j["channels"] = {"trades"};
     ws_->send(j.dump());
   }
@@ -61,9 +108,11 @@ struct Polymarket : public StreamingMarketBackend {
     try {
       auto j = json::parse(msg);
       if (j.contains("event_type") && j["event_type"] == "price_change") {
-        std::string ticker = j["token_id"];
+        std::string token_id = j["token_id"];
         double price = std::stod(j["price"].get<std::string>());
-        update_price(MarketId(ticker.c_str()), Price::from_double(price),
+        // We need to map token_id back to MarketId and side.
+        // For now, update by token_id as ticker.
+        update_price(MarketId(token_id.c_str()), Price::from_double(price),
                      Price::from_double(1.0 - price));
       }
     } catch (...) {
@@ -99,7 +148,7 @@ struct Polymarket : public StreamingMarketBackend {
     std::string url = "https://clob.polymarket.com" + path;
 
     json j;
-    j["token_id"] = o.market.ticker;
+    j["token_id"] = resolve_token_id(o.market, o.outcome_yes);
     j["price"] = o.price.to_usd_string();
     j["size"] = std::to_string(o.quantity);
     j["side"] = o.is_buy ? "BUY" : "SELL";
