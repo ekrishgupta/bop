@@ -1,5 +1,4 @@
 #include "bop.hpp"
-#include "core/dashboard.hpp"
 #include "core/algo.hpp"
 #include "exchanges/kalshi/kalshi.hpp"
 #include "exchanges/polymarket/polymarket.hpp"
@@ -9,7 +8,7 @@
 #include <iostream>
 #include <thread>
 
-DashboardExecutionEngine RealLiveExchange;
+LiveExecutionEngine RealLiveExchange;
 ExecutionEngine &LiveExchange = RealLiveExchange;
 
 const char *tif_to_string(TimeInForce tif) {
@@ -296,8 +295,8 @@ void auth_demo() {
   polymarket.set_credentials({"", "0x_my_private_key", "", "0x_my_address"});
 
   // Load Markets for mapping tickers to IDs
-  kalshi.load_markets();
-  polymarket.load_markets();
+  kalshi.sync_markets();
+  polymarket.sync_markets();
 
   std::string p_sign =
       polymarket.sign_request("POST", "/orders", "{\"qty\":10}");
