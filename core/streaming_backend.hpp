@@ -84,8 +84,12 @@ protected:
   virtual void handle_message(const std::string &msg) = 0;
 
   void update_price(MarketId market, Price yes, Price no) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    price_cache_[market.hash] = {yes, no};
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      price_cache_[market.hash] = {yes, no};
+    }
+    if (engine_)
+      engine_->trigger_tick();
   }
 
   void update_orderbook(MarketId market, const OrderBook &ob) {
@@ -100,6 +104,8 @@ protected:
     }
     if (cb)
       cb(ob);
+    if (engine_)
+      engine_->trigger_tick();
   }
 
   void notify_fill(const std::string &id, int qty, Price price);

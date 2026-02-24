@@ -94,8 +94,15 @@ struct ExecutionEngine {
     return 0; 
   }
 
-  virtual void stop() { is_running = false; }
-  virtual void run();
+  virtual void run() {
+    is_running = true;
+    std::cout << "[ENGINE] Starting default responsive event loop..." << std::endl;
+    while (is_running) {
+      GlobalAlgoManager.tick(*this);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+  virtual void trigger_tick() {}
 };
 
 class LiveExecutionEngine : public ExecutionEngine {
@@ -103,12 +110,19 @@ class LiveExecutionEngine : public ExecutionEngine {
   Price cached_balance{0};
   std::unordered_map<uint32_t, int64_t> cached_positions;
   std::thread sync_thread;
+  std::condition_variable tick_cv;
+  std::mutex tick_mtx;
 
 public:
   LiveExecutionEngine() = default;
   ~LiveExecutionEngine() {
     stop();
     if (sync_thread.joinable()) sync_thread.join();
+    tick_cv.notify_all();
+  }
+
+  void trigger_tick() override {
+    tick_cv.notify_one();
   }
 
   int64_t get_position(MarketId market) const override {
@@ -136,24 +150,18 @@ public:
       }
     });
 
-    std::cout << "[LIVE ENGINE] Starting high-frequency event loop..."
+    std::cout << "[LIVE ENGINE] Starting responsive event loop (WebSocket driven)..."
               << std::endl;
     while (is_running) {
-      auto start = std::chrono::high_resolution_clock::now();
+      {
+        std::unique_lock<std::mutex> lock(tick_mtx);
+        // Wait for market update OR 100ms timeout (for time-based algos like TWAP)
+        tick_cv.wait_for(lock, std::chrono::milliseconds(100));
+      }
+
+      if (!is_running) break;
 
       GlobalAlgoManager.tick(*this);
-
-      auto end = std::chrono::high_resolution_clock::now();
-      auto elapsed =
-          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count();
-
-      // Aim for ~1ms loop if possible, but don't busy-wait 100% if we are too
-      // fast
-      if (elapsed < 1000) {
-        std::this_thread::sleep_for(
-            std::chrono::microseconds(1000 - elapsed));
-      }
     }
   }
 
@@ -227,18 +235,6 @@ private:
 extern bop::ExecutionEngine &LiveExchange;
 
 #include "algo_manager.hpp"
-
-namespace bop {
-inline void ExecutionEngine::run() {
-  is_running = true;
-  std::cout << "[ENGINE] Starting event loop..." << std::endl;
-  while (is_running) {
-    GlobalAlgoManager.tick(*this);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-  std::cout << "[ENGINE] Event loop stopped." << std::endl;
-}
-} // namespace bop
 
 // Final Dispatch Operators
 inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
