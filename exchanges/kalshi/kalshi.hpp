@@ -13,6 +13,28 @@ struct Kalshi : public StreamingMarketBackend {
 
   std::string name() const override { return "Kalshi"; }
 
+  void load_markets() override {
+    std::string url = "https://api.elections.kalshi.com/trade-api/v2/markets";
+    try {
+      // Kalshi might require authentication for this endpoint if it's large,
+      // but let's try a public GET first.
+      auto resp = Network.get(url);
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        if (j.contains("markets")) {
+          for (auto &m : j["markets"]) {
+            std::string ticker = m["ticker"];
+            // We can also map something else if we want friendly names.
+            // For now, just store ticker -> ticker to satisfy the requirement
+            // of having it in the map.
+            ticker_to_id[ticker] = ticker;
+          }
+        }
+      }
+    } catch (...) {
+    }
+  }
+
   // Historical Cutoffs (RFC3339 formatted as per docs)
   struct Cutoffs {
     std::string market_settled_ts;
@@ -26,9 +48,10 @@ struct Kalshi : public StreamingMarketBackend {
 
   // --- Market Data ---
   Price get_price_http(MarketId market, bool outcome_yes) const override {
+    std::string resolved = resolve_ticker(market.ticker);
     std::string url =
         std::string("https://api.elections.kalshi.com/trade-api/v2/markets/") +
-        market.ticker;
+        resolved;
     try {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
@@ -62,7 +85,7 @@ struct Kalshi : public StreamingMarketBackend {
     j["id"] = 1;
     j["cmd"] = "subscribe";
     j["params"]["channels"] = {"ticker"};
-    j["params"]["market_tickers"] = {market.ticker};
+    j["params"]["market_tickers"] = {resolve_ticker(market.ticker)};
     ws_->send(j.dump());
   }
 
@@ -87,7 +110,7 @@ struct Kalshi : public StreamingMarketBackend {
     json j;
     j["action"] = o.is_buy ? "buy" : "sell";
     j["amount"] = o.quantity;
-    j["market_ticker"] = o.market.ticker;
+    j["market_ticker"] = resolve_ticker(o.market.ticker);
     j["side"] = o.outcome_yes ? "yes" : "no";
     j["type"] = (o.price.raw == 0) ? "market" : "limit";
 
