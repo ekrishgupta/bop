@@ -124,6 +124,11 @@ public:
 
   void run() override {
     is_running = true;
+
+    // Perform initial synchronous sync to ensure balance/positions are available immediately
+    std::cout << "[LIVE ENGINE] Performing initial state sync..." << std::endl;
+    sync_state();
+
     sync_thread = std::thread([this]() {
       while (is_running) {
         sync_state();
