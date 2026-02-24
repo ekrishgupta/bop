@@ -1,8 +1,12 @@
 #pragma once
 
+#include <condition_variable>
 #include <functional>
 #include <ixwebsocket/IXWebSocket.h>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace bop {
@@ -36,14 +40,19 @@ public:
 
 /**
  * @brief Production-grade implementation of a WebSocket client using IXWebSocket.
+ * Includes a background processing thread and message queue for high-frequency
+ * buffer management.
  */
 class LiveWebSocketClient : public WebSocketClient {
 public:
-  LiveWebSocketClient() {
+  LiveWebSocketClient() : running_(true) {
     ws_.setOnMessageCallback([this](const ix::WebSocketMessagePtr &msg) {
       if (msg->type == ix::WebSocketMessageType::Message) {
-        if (message_cb_)
-          message_cb_(msg->str);
+        {
+          std::lock_guard<std::mutex> lock(queue_mutex_);
+          message_queue_.push(msg->str);
+        }
+        queue_cv_.notify_one();
       } else if (msg->type == ix::WebSocketMessageType::Open) {
         if (open_cb_)
           open_cb_();
@@ -62,8 +71,19 @@ public:
 
     // 2. Automatic Reconnection logic
     ws_.enableAutomaticReconnection();
-    ws_.setReconnectionDelay(1000);    // Start with 1s
+    ws_.setReconnectionDelay(1000);     // Start with 1s
     ws_.setMaxReconnectionDelay(30000); // Max 30s
+
+    // 3. Background Processing Thread for Buffer Management
+    processing_thread_ = std::thread([this]() { this->process_messages(); });
+  }
+
+  ~LiveWebSocketClient() {
+    running_ = false;
+    queue_cv_.notify_all();
+    if (processing_thread_.joinable()) {
+      processing_thread_.join();
+    }
   }
 
   void connect(const std::string &url) override {
@@ -90,16 +110,43 @@ public:
 
   void subscribe(const std::string &channel,
                  const std::vector<std::string> &symbols) override {
-    // Exchange-specific subscription logic is typically handled in backends,
-    // but this provides a hook if needed.
+    // Exchange-specific subscription logic is typically handled in backends
   }
 
 private:
+  void process_messages() {
+    while (running_) {
+      std::string msg;
+      {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        queue_cv_.wait(lock,
+                       [this]() { return !message_queue_.empty() || !running_; });
+
+        if (!running_ && message_queue_.empty())
+          break;
+
+        msg = std::move(message_queue_.front());
+        message_queue_.pop();
+      }
+
+      if (message_cb_) {
+        message_cb_(msg);
+      }
+    }
+  }
+
   ix::WebSocket ws_;
   std::function<void()> open_cb_;
   std::function<void()> close_cb_;
   std::function<void(const std::string &)> error_cb_;
   std::function<void(const std::string &)> message_cb_;
+
+  // Buffer Management
+  std::queue<std::string> message_queue_;
+  std::mutex queue_mutex_;
+  std::condition_variable queue_cv_;
+  std::thread processing_thread_;
+  std::atomic<bool> running_;
 };
 
 } // namespace bop
