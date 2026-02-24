@@ -40,6 +40,16 @@ struct Price {
     return raw / (SCALE / ticks_per_unit);
   }
 
+  constexpr int64_t to_cents() const { return to_ticks(100); }
+
+  std::string to_usd_string() const {
+    // Basic conversion to string with fixed precision
+    double d = to_double();
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.4f", d);
+    return std::string(buf);
+  }
+
   // Arithmetic
   constexpr Price operator+(Price other) const {
     return Price(raw + other.raw);
