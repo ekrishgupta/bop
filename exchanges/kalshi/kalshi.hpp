@@ -5,7 +5,11 @@
 namespace bop::exchanges {
 
 struct Kalshi : public StreamingMarketBackend {
-  Kalshi() : StreamingMarketBackend(std::make_unique<MockWebSocketClient>()) {}
+  Kalshi()
+      : StreamingMarketBackend(std::make_unique<ProductionWebSocketClient>()) {
+    if (ws_)
+      ws_->connect("wss://api.elections.kalshi.com/trade-api/v2/stream");
+  }
 
   std::string name() const override { return "Kalshi"; }
 
@@ -149,7 +153,8 @@ struct Kalshi : public StreamingMarketBackend {
 
     return {{"KALSHI-ACCESS-KEY", credentials.api_key},
             {"KALSHI-ACCESS-SIGNATURE", signature},
-            {"KALSHI-ACCESS-TIMESTAMP", timestamp}};
+            {"KALSHI-ACCESS-TIMESTAMP", timestamp},
+            {"Content-Type", "application/json"}};
   }
 
   std::string sign_request(const std::string &method, const std::string &path,

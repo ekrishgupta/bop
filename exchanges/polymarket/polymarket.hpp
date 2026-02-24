@@ -6,7 +6,10 @@ namespace bop::exchanges {
 
 struct Polymarket : public StreamingMarketBackend {
   Polymarket()
-      : StreamingMarketBackend(std::make_unique<MockWebSocketClient>()) {}
+      : StreamingMarketBackend(std::make_unique<ProductionWebSocketClient>()) {
+    if (ws_)
+      ws_->connect("wss://clob.polymarket.com/ws");
+  }
 
   std::string name() const override { return "Polymarket"; }
 
@@ -153,12 +156,13 @@ struct Polymarket : public StreamingMarketBackend {
             .count();
     std::string timestamp = std::to_string(s);
     std::string signature = auth::PolySigner::sign(
-        credentials.secret_key, timestamp, method, path, body);
+        credentials.secret_key, credentials.address, timestamp, method, path, body);
 
     return {{"POLY-API-KEY", credentials.api_key},
             {"POLY-PASSPHRASE", credentials.passphrase},
             {"POLY-SIGNATURE", signature},
-            {"POLY-TIMESTAMP", timestamp}};
+            {"POLY-TIMESTAMP", timestamp},
+            {"Content-Type", "application/json"}};
   }
 
   std::string sign_request(const std::string &method, const std::string &path,
