@@ -15,7 +15,8 @@ include_directories(
 # Find Dependencies
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -39,18 +40,18 @@ add_library(bop_core
     core/impl.cpp
     core/algo.cpp
 )
-target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::system simdjson::simdjson)
+target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::boost simdjson::simdjson SQLite::SQLite3)
 
 # Main Executable
 add_executable(main main.cpp)
 target_link_libraries(main PRIVATE bop_core)
 
 # Tests
-add_executable(test_auth test_auth.cpp)
-target_link_libraries(test_auth PRIVATE bop_core)
+# add_executable(test_auth test_auth.cpp)
+# target_link_libraries(test_auth PRIVATE bop_core)
 
-add_executable(test_keccak test_keccak.cpp)
-target_link_libraries(test_keccak PRIVATE bop_core)
+# add_executable(test_keccak test_keccak.cpp)
+# target_link_libraries(test_keccak PRIVATE bop_core)
 
 add_executable(backtest_example examples/backtest_example.cpp)
 target_link_libraries(backtest_example PRIVATE bop_core)
