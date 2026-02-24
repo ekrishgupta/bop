@@ -27,10 +27,12 @@ constexpr uint32_t fnv1a(const char *str, uint32_t hash = FNV_OFFSET_BASIS) {
 struct MarketId {
   uint32_t hash;
   std::string ticker; // Added for real API calls
+  bool resolved = false;
 
-  explicit MarketId(uint32_t h) : hash(h), ticker("") {}
-  MarketId(const char *t) : hash(fnv1a(t)), ticker(t) {}
-  MarketId(uint32_t h, std::string t) : hash(h), ticker(std::move(t)) {}
+  explicit MarketId(uint32_t h) : hash(h), ticker(""), resolved(false) {}
+  MarketId(const char *t) : hash(fnv1a(t)), ticker(t), resolved(false) {}
+  MarketId(uint32_t h, std::string t) : hash(h), ticker(std::move(t)), resolved(false) {}
+  MarketId(uint32_t h, std::string t, bool r) : hash(h), ticker(std::move(t)), resolved(r) {}
 };
 
 // Compile-Time Account ID wrapper

@@ -37,40 +37,59 @@ struct MarketTarget {
   MarketId market;
   const MarketBackend *backend = nullptr;
 
+  MarketTarget resolve() const {
+    if (backend && !market.resolved) {
+      std::string id = backend->resolve_ticker(market.ticker);
+      if (id != market.ticker) {
+        return {MarketId(fnv1a(id.c_str()), id, true), backend};
+      }
+    }
+    return *this;
+  }
+
   inline MarketQuery<PriceTag> Price(YES_t) const {
-    return {market, true, backend};
+    auto r = resolve();
+    return {r.market, true, r.backend};
   }
   inline MarketQuery<PriceTag> Price(NO_t) const {
-    return {market, false, backend};
+    auto r = resolve();
+    return {r.market, false, r.backend};
   }
   inline MarketQuery<VolumeTag> Volume(YES_t) const {
-    return {market, true, backend};
+    auto r = resolve();
+    return {r.market, true, r.backend};
   }
   inline MarketQuery<VolumeTag> Volume(NO_t) const {
-    return {market, false, backend};
+    auto r = resolve();
+    return {r.market, false, r.backend};
   }
 
   // Market Depth Queries
   inline MarketQuery<DepthTag> Spread() const {
-    return {market, true, backend};
+    auto r = resolve();
+    return {r.market, true, r.backend};
   }
   inline MarketQuery<DepthTag> BestBid() const {
-    return {market, true, backend};
+    auto r = resolve();
+    return {r.market, true, r.backend};
   }
   inline MarketQuery<DepthTag> BestAsk() const {
-    return {market, false, backend};
+    auto r = resolve();
+    return {r.market, false, r.backend};
   }
 
   // WebSocket Streaming Entry Points
   inline void
   OnOrderbook(std::function<void(const OrderBook &)> callback) const {
-    if (backend)
-      backend->ws_subscribe_orderbook(market, callback);
+    auto r = resolve();
+    if (r.backend)
+      r.backend->ws_subscribe_orderbook(r.market, callback);
   }
 
   inline void OnTrade(std::function<void(bop::Price, int64_t)> callback) const {
-    if (backend)
-      backend->ws_subscribe_trades(market, callback);
+    auto r = resolve();
+    if (r.backend)
+      r.backend->ws_subscribe_trades(r.market, callback);
   }
 };
 
@@ -79,10 +98,23 @@ struct SpreadTarget {
   MarketId m1;
   MarketId m2;
   const MarketBackend *backend = nullptr;
+
+  SpreadTarget resolve() const {
+    if (backend) {
+        std::string id1 = m1.resolved ? m1.ticker : backend->resolve_ticker(m1.ticker);
+        std::string id2 = m2.resolved ? m2.ticker : backend->resolve_ticker(m2.ticker);
+        return {MarketId(fnv1a(id1.c_str()), id1, true), 
+                MarketId(fnv1a(id2.c_str()), id2, true), 
+                backend};
+    }
+    return *this;
+  }
 };
 
 inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
-  return {a.market, b.market, a.backend};
+  auto ra = a.resolve();
+  auto rb = b.resolve();
+  return {ra.market, rb.market, ra.backend};
 }
 
 struct MarketBoundSpread {
@@ -94,11 +126,13 @@ struct MarketBoundSpread {
 };
 
 inline MarketBoundSpread operator/(const Buy &b, SpreadTarget spread) {
-  return {b.quantity, true, spread, b.timestamp_ns, spread.backend};
+  auto rs = spread.resolve();
+  return {b.quantity, true, rs, b.timestamp_ns, rs.backend};
 }
 
 inline MarketBoundSpread operator/(const Sell &s, SpreadTarget spread) {
-  return {s.quantity, false, spread, s.timestamp_ns, spread.backend};
+  auto rs = spread.resolve();
+  return {s.quantity, false, rs, s.timestamp_ns, rs.backend};
 }
 
 inline Order operator/(const MarketBoundSpread &m, YES_t) {
@@ -134,14 +168,31 @@ template <typename Tag> struct RelativeCondition {
   bool eval() const;
 };
 
+// Helper to identify DSL conditions
+template <typename T> struct is_bop_condition : std::false_type {};
+
+template <typename Tag, typename Q>
+struct is_bop_condition<Condition<Tag, Q>> : std::true_type {};
+template <typename Tag>
+struct is_bop_condition<RelativeCondition<Tag>> : std::true_type {};
+template <typename L, typename R>
+struct is_bop_condition<AndCondition<L, R>> : std::true_type {};
+template <typename L, typename R>
+struct is_bop_condition<OrCondition<L, R>> : std::true_type {};
+
 // Logical Operators for Conditions
 template <typename L, typename R>
-inline AndCondition<L, R> operator&&(const L &l, const R &r) {
+inline std::enable_if_t<is_bop_condition<L>::value ||
+                            is_bop_condition<R>::value,
+                        AndCondition<L, R>>
+operator&&(const L &l, const R &r) {
   return {l, r};
 }
 
 template <typename L, typename R>
-inline OrCondition<L, R> operator||(const L &l, const R &r) {
+inline std::enable_if_t<
+    is_bop_condition<L>::value || is_bop_condition<R>::value, OrCondition<L, R>>
+operator||(const L &l, const R &r) {
   return {l, r};
 }
 
@@ -202,11 +253,13 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
 }
 
 inline MarketBoundOrder operator/(const Buy &b, MarketTarget target) {
-  return {b.quantity, true, target.market, b.timestamp_ns, target.backend};
+  auto r = target.resolve();
+  return {b.quantity, true, r.market, b.timestamp_ns, r.backend};
 }
 
 inline MarketBoundOrder operator/(const Sell &s, MarketTarget target) {
-  return {s.quantity, false, target.market, s.timestamp_ns, target.backend};
+  auto r = target.resolve();
+  return {s.quantity, false, r.market, s.timestamp_ns, r.backend};
 }
 
 // Relative Comparisons
@@ -282,10 +335,15 @@ inline MarketTarget Market(const char *name) {
 }
 
 inline MarketTarget Market(MarketId mkt, const MarketBackend &b) {
-  return {mkt, &b};
+  return MarketTarget{mkt, &b}.resolve();
 }
 inline MarketTarget Market(const char *name, const MarketBackend &b) {
-  return {MarketId(name), &b};
+  return MarketTarget{MarketId(name), &b}.resolve();
+}
+
+inline MarketQuery<PositionTag> Position(MarketTarget target) {
+  auto r = target.resolve();
+  return {r.market, true, r.backend};
 }
 
 inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }

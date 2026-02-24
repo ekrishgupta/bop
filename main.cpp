@@ -363,10 +363,9 @@ int main() {
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
 
-  // 3. Load Markets & Discover Mapping
+  // 3. Sync Markets & Discover Mapping
   std::cout << "[MAIN] Discovering markets..." << std::endl;
-  kalshi.load_markets();
-  polymarket.load_markets();
+  RealLiveExchange.sync_all_markets();
 
   // 4. Define Persistent Strategies
   std::cout << "[MAIN] Deploying strategies..." << std::endl;
