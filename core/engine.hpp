@@ -477,13 +477,26 @@ inline bool Condition<Tag, Q>::eval() const {
 }
 
 template <typename T>
-class PersistentConditionalStrategy : public bop::ExecutionStrategy {
+class PersistentConditionalStrategy : public bop::ExecutionStrategy, public bop::StrategyCRTP<PersistentConditionalStrategy<T>> {
   bop::ConditionalOrder<T> co;
 
 public:
   PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order) : co(order) {}
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
+
+  void on_market_event_impl(ExecutionEngine&, MarketId, Price, int64_t) {}
+  void on_execution_event_impl(ExecutionEngine&, const std::string&, OrderStatus) {}
 };
+
+template <typename T>
+inline bool PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
+  if (co.condition.eval()) {
+    co.order >> engine;
+    return true;
+  }
+  return false;
+}
 
 template <typename T>
 inline void operator>>(const bop::ConditionalOrder<T> &co,

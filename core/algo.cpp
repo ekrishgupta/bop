@@ -269,7 +269,7 @@ MarketMakerAlgo::MarketMakerAlgo(const Order &o) {
     ref = data.ref;
 }
 
-bool MarketMakerAlgo::tick(ExecutionEngine &engine) {
+bool MarketMakerAlgo::tick_impl(ExecutionEngine &engine) {
     Price ref_price;
     if (ref == ReferencePrice::Mid) {
         Price bid = engine.get_depth(parent_order.market, true);

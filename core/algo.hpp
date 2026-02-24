@@ -95,7 +95,7 @@ public:
   bool tick_impl(ExecutionEngine &engine);
 };
 
-class MarketMakerAlgo : public ExecutionAlgo {
+class MarketMakerAlgo : public ExecutionAlgo, public AlgoCRTP<MarketMakerAlgo> {
   Price spread;
   ReferencePrice ref;
   std::string bid_id;
@@ -104,7 +104,8 @@ class MarketMakerAlgo : public ExecutionAlgo {
 
 public:
   MarketMakerAlgo(const Order &o);
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
 };
 
 } // namespace bop
