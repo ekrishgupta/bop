@@ -4,6 +4,7 @@
 #include "logic.hpp"
 #include "order_tracker.hpp"
 #include "streaming_backend.hpp"
+#include "database.hpp"
 #include <iostream>
 #include <atomic>
 #include <thread>
@@ -33,6 +34,7 @@ struct ExecutionEngine {
   std::atomic<int64_t> current_daily_pnl_raw{0};
   std::unordered_map<std::string, std::string> market_to_sector;
   mutable std::mutex risk_mtx;
+  Database db;
 
   virtual ~ExecutionEngine() = default;
 
@@ -63,18 +65,23 @@ struct ExecutionEngine {
 
   // Order Tracking
   void track_order(const std::string &id, const Order &o) {
+    db.log_order(id, o);
     order_store.track(id, o);
   }
 
   void update_order_status(const std::string &id, OrderStatus status) {
+    db.log_status(id, status);
     order_store.update_status(id, status);
   }
 
   void add_order_fill(const std::string &id, int qty, Price price) {
-    // 1. Update order store
+    // 1. Update persistent store
+    db.log_fill(id, qty, price);
+
+    // 2. Update order store
     order_store.add_fill(id, qty, price);
 
-    // 2. Real-time PnL tracking (simplified realized PnL delta)
+    // 3. Real-time PnL tracking (simplified realized PnL delta)
     // In a real system, we'd compare price to cost basis.
     // For demonstration of kill-switch teeth, we'll assume a 1% slippage loss
     // on every fill to simulate a "bad day" if many orders fill.
@@ -147,6 +154,10 @@ struct ExecutionEngine {
     return order_store.get_all();
   }
 
+  virtual void stop() {
+    is_running = false;
+  }
+
   virtual size_t get_open_order_count(MarketId market) const {
     return const_cast<ExecutionEngine *>(this)->order_store.count_open(market);
   }
@@ -157,8 +168,22 @@ struct ExecutionEngine {
       std::string pos_json = b->get_positions();
       try {
         auto j = nlohmann::json::parse(pos_json);
-        // Simplified search for this specific market in the JSON
-        // In a real implementation, we'd use the same parsing logic as LiveExecutionEngine
+        if (j.contains("positions")) {
+          for (const auto &p : j["positions"]) {
+            std::string ticker;
+            if (p.contains("ticker")) ticker = p["ticker"];
+            else if (p.contains("market_ticker")) ticker = p["market_ticker"];
+            
+            if (fnv1a(ticker.c_str()) == market.hash) {
+                if (p.contains("size")) {
+                    if (p["size"].is_string()) total += std::stoll(p["size"].get<std::string>());
+                    else total += p["size"].get<int64_t>();
+                } else if (p.contains("quantity")) {
+                    total += p["quantity"].get<int64_t>();
+                }
+            }
+          }
+        }
       } catch (...) {
       }
     }
@@ -359,6 +384,7 @@ private:
       std::lock_guard<std::mutex> lock(mtx);
       cached_balance = total_balance;
       cached_positions = std::move(new_positions);
+      db.log_pnl_snapshot(cached_balance, get_pnl(), current_daily_pnl_raw.load());
     }
     std::cout << "[LIVE ENGINE] Synced state: Balance=" << cached_balance << " Markets=" << cached_positions.size() << std::endl;
   }
