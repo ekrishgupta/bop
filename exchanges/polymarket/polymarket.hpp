@@ -1,19 +1,20 @@
 #pragma once
 
-#include "../../core/market_base.hpp"
+#include "../../core/streaming_backend.hpp"
 
 namespace bop::exchanges {
 
-struct Polymarket : public MarketBackend {
+struct Polymarket : public StreamingMarketBackend {
+  Polymarket()
+      : StreamingMarketBackend(std::make_unique<MockWebSocketClient>()) {}
+
   std::string name() const override { return "Polymarket"; }
 
   // --- Exchange Status & Metadata ---
-  int64_t clob_get_server_time() const override {
-    return 1709400000; // Mock CLOB timestamp
-  }
+  int64_t clob_get_server_time() const override { return 1709400000; }
 
   // --- Market Data (Live) ---
-  Price get_price(MarketId market, bool outcome_yes) const override {
+  Price get_price_http(MarketId market, bool outcome_yes) const override {
     std::string url =
         std::string("https://clob.polymarket.com/last-trade-price?token_id=") +
         market.ticker;
@@ -21,7 +22,6 @@ struct Polymarket : public MarketBackend {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
         auto j = resp.json_body();
-        // Polymarket returns { "price": "0.60", "side": "buy" }
         double price_val = std::stod(j["price"].get<std::string>());
         if (!outcome_yes)
           price_val = 1.0 - price_val;
@@ -29,28 +29,48 @@ struct Polymarket : public MarketBackend {
       }
     } catch (...) {
     }
-    return Price::from_cents(60); // Mock fallback
+    return Price::from_cents(60);
+  }
+
+  OrderBook get_orderbook_http(MarketId market) const override {
+    return {{{Price::from_cents(59), 200}}, {{Price::from_cents(61), 250}}};
   }
 
   Price get_depth(MarketId, bool) const override {
-    return Price::from_cents(5); // Mock spread
-  }
-
-  OrderBook get_orderbook(MarketId) const override {
-    return {{{Price::from_cents(59), 200}},
-            {{Price::from_cents(61), 250}}}; // Mock L2 book
+    return Price::from_cents(5);
   }
 
   std::vector<Candlestick> get_candlesticks(MarketId) const override {
     return {{0, Price::from_cents(60), Price::from_cents(62),
-             Price::from_cents(58), Price::from_cents(61), 5000}}; // Mock OHLCV
+             Price::from_cents(58), Price::from_cents(61), 5000}};
+  }
+
+  // WebSocket implementation
+  void send_subscription(MarketId market) const override {
+    json j;
+    j["type"] = "subscribe";
+    j["token_ids"] = {market.ticker};
+    j["channels"] = {"trades"};
+    ws_->send(j.dump());
+  }
+
+  void handle_message(const std::string &msg) override {
+    try {
+      auto j = json::parse(msg);
+      if (j.contains("event_type") && j["event_type"] == "price_change") {
+        std::string ticker = j["token_id"];
+        double price = std::stod(j["price"].get<std::string>());
+        update_price(MarketId(ticker.c_str()), Price::from_double(price),
+                     Price::from_double(1.0 - price));
+      }
+    } catch (...) {
+    }
   }
 
   // --- Gamma Market Discovery ---
   std::string gamma_get_event(const std::string &id) const override {
     return "{\"event\": \"id_" + id + "\"}";
   }
-
   std::string gamma_get_market(const std::string &id) const override {
     return "{\"market\": \"id_" + id + "\"}";
   }
@@ -70,14 +90,6 @@ struct Polymarket : public MarketBackend {
     return Price::from_cents(1);
   }
 
-  // --- Historical ---
-  std::vector<Candlestick>
-  get_historical_candlesticks(MarketId market) const override {
-    return {{0, Price::from_cents(50), Price::from_cents(60),
-             Price::from_cents(48), Price::from_cents(59),
-             10000}}; // Mock clob_get_prices_history
-  }
-
   // --- Trading ---
   std::string create_order(const Order &o) const override {
     std::string path = "/orders";
@@ -89,14 +101,12 @@ struct Polymarket : public MarketBackend {
     j["size"] = std::to_string(o.quantity);
     j["side"] = o.is_buy ? "BUY" : "SELL";
     j["order_type"] = (o.price.raw == 0) ? "MARKET" : "LIMIT";
-    j["expiration"] = "0"; // GTC
+    j["expiration"] = "0";
     j["timestamp"] = std::to_string(
         std::chrono::system_clock::now().time_since_epoch().count() /
         1000000000);
-
-    // In Polymarket, the owner/nonce/signature are part of the order payload
     j["owner"] = credentials.address;
-    j["nonce"] = 0; // Should be tracked
+    j["nonce"] = 0;
     j["signature"] = sign_request("POST", path, j.dump());
 
     std::string body = j.dump();
@@ -113,6 +123,7 @@ struct Polymarket : public MarketBackend {
     }
     return "error";
   }
+
   bool cancel_order(const std::string &) const override { return true; }
 
   // --- Portfolio (REST via CLOB) ---
@@ -123,7 +134,6 @@ struct Polymarket : public MarketBackend {
       auto resp = Network.get(url, auth_headers("GET", path));
       if (resp.status_code == 200) {
         auto j = resp.json_body();
-        // Polymarket returns balance as a string decimal
         return Price::from_double(std::stod(j["balance"].get<std::string>()));
       }
     } catch (...) {
@@ -132,25 +142,6 @@ struct Polymarket : public MarketBackend {
   }
 
   std::string get_positions() const override { return "{\"positions\": []}"; }
-
-  // --- WebSocket Streaming ---
-  void ws_subscribe_orderbook(
-      MarketId market,
-      std::function<void(const OrderBook &)> callback) const override {
-    std::cout << "[POLYMARKET] WS Subscribe Orderbook: " << market.hash
-              << std::endl;
-  }
-
-  void ws_subscribe_trades(
-      MarketId market,
-      std::function<void(Price, int64_t)> callback) const override {
-    std::cout << "[POLYMARKET] WS Subscribe Trades: " << market.hash
-              << std::endl;
-  }
-
-  void ws_unsubscribe(MarketId market) const override {
-    std::cout << "[POLYMARKET] WS Unsubscribe: " << market.hash << std::endl;
-  }
 
   // Authentication Helpers
   std::map<std::string, std::string>
@@ -179,7 +170,8 @@ struct Polymarket : public MarketBackend {
 
 static Polymarket polymarket;
 
-// Helper for Polymarket-specific targets
-MarketTarget PolyMarket(const char *id) { return Market(id, polymarket); }
+inline MarketTarget PolyMarket(const char *id) {
+  return Market(id, polymarket);
+}
 
 } // namespace bop::exchanges
