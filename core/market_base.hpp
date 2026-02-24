@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace bop {
 
@@ -15,6 +16,36 @@ struct OrderBookLevel {
   Price price;
   int64_t quantity;
   std::string order_id; // For L3/Incremental updates
+};
+
+struct SuperMarket {
+    std::string ticker;
+    struct Entry {
+        MarketId market;
+        const MarketBackend* backend;
+    };
+    std::vector<Entry> entries;
+};
+
+class MarketRegistry {
+public:
+    static void Register(const std::string& super_ticker, MarketId mkt, const MarketBackend& backend) {
+        instance().markets[super_ticker].ticker = super_ticker;
+        instance().markets[super_ticker].entries.push_back({mkt, &backend});
+    }
+
+    static const SuperMarket* Get(const std::string& super_ticker) {
+        auto it = instance().markets.find(super_ticker);
+        if (it != instance().markets.end()) return &it->second;
+        return nullptr;
+    }
+
+private:
+    static MarketRegistry& instance() {
+        static MarketRegistry reg;
+        return reg;
+    }
+    std::unordered_map<std::string, SuperMarket> markets;
 };
 
 struct OrderBook {
