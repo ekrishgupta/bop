@@ -201,6 +201,57 @@ struct KalshiSigner {
   }
 };
 
+namespace eth {
+inline std::string sign_hash(const std::string &private_key_hex,
+                             const std::string &hash_bytes) {
+  auto priv_bytes = from_hex(private_key_hex);
+  BIGNUM *priv_bn = BN_bin2bn(priv_bytes.data(), priv_bytes.size(), nullptr);
+  EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+  EC_KEY_set_private_key(key, priv_bn);
+
+  EC_POINT *pub_point = EC_POINT_new(EC_KEY_get0_group(key));
+  EC_POINT_mul(EC_KEY_get0_group(key), pub_point, priv_bn, nullptr, nullptr,
+               nullptr);
+  EC_KEY_set_public_key(key, pub_point);
+
+  ECDSA_SIG *sig = ECDSA_do_sign(
+      reinterpret_cast<const unsigned char *>(hash_bytes.c_str()),
+      hash_bytes.size(), key);
+
+  const BIGNUM *r_bn, *s_bn;
+  ECDSA_SIG_get0(sig, &r_bn, &s_bn);
+
+  BIGNUM *order = BN_new();
+  EC_GROUP_get_order(EC_KEY_get0_group(key), order, nullptr);
+  BIGNUM *half_order = BN_new();
+  BN_rshift1(half_order, order);
+  if (BN_cmp(s_bn, half_order) > 0) {
+    BIGNUM *new_s = BN_new();
+    BN_sub(new_s, order, s_bn);
+    ECDSA_SIG_set0(sig, BN_dup(r_bn), new_s);
+    ECDSA_SIG_get0(sig, &r_bn, &s_bn);
+  }
+
+  int v = 27; // Placeholder for recovery ID logic
+  unsigned char r_bin[32], s_bin[32];
+  BN_bn2binpad(r_bn, r_bin, 32);
+  BN_bn2binpad(s_bn, s_bin, 32);
+  unsigned char v_byte = static_cast<unsigned char>(v);
+
+  std::string signature = "0x" + to_hex(r_bin, 32) + to_hex(s_bin, 32) +
+                          to_hex(&v_byte, 1);
+
+  ECDSA_SIG_free(sig);
+  EC_KEY_free(key);
+  BN_free(priv_bn);
+  BN_free(order);
+  BN_free(half_order);
+  EC_POINT_free(pub_point);
+
+  return signature;
+}
+} // namespace eth
+
 struct PolySigner {
   // Polymarket requires EIP-712 or personal_sign.
   // This is a utility to sign a message using a secp256k1 private key.
@@ -210,18 +261,15 @@ struct PolySigner {
                           const std::string &method, const std::string &path,
                           const std::string &body = "") {
     // 1. EIP-712 Domain Separator
-    // keccak256("EIP712Domain(string name,string version,uint256 chainId)")
     std::string typeHash_Domain =
         keccak::hash("EIP712Domain(string name,string version,uint256 chainId)");
     std::string nameHash = keccak::hash("ClobApi");
     std::string versionHash = keccak::hash("1");
     std::string chainId = encode_uint256(137);
-
     std::string domainSeparator =
         keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
 
     // 2. Struct Hash
-    // keccak256("ClobAuth(address address,string timestamp,string method,string path,string body)")
     std::string typeHash_ClobAuth = keccak::hash(
         "ClobAuth(address address,string timestamp,string method,string path,string body)");
     std::string addrEncoded = encode_address(address_hex);
@@ -229,68 +277,15 @@ struct PolySigner {
     std::string mHash = keccak::hash(method);
     std::string pHash = keccak::hash(path);
     std::string bHash = keccak::hash(body);
-
     std::string structHash = keccak::hash(typeHash_ClobAuth + addrEncoded +
                                           tsHash + mHash + pHash + bHash);
 
     // 3. Final EIP-712 Hash
-    std::string finalHash = keccak::hash("\x19\x01" + domainSeparator + structHash);
+    std::string finalHash =
+        keccak::hash("\x19\x01" + domainSeparator + structHash);
 
     // 4. ECDSA Sign
-    auto priv_bytes = from_hex(private_key_hex);
-    BIGNUM *priv_bn = BN_bin2bn(priv_bytes.data(), priv_bytes.size(), nullptr);
-    EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
-    EC_KEY_set_private_key(key, priv_bn);
-
-    // To get recovery ID, we need the public key
-    EC_POINT *pub_point = EC_POINT_new(EC_KEY_get0_group(key));
-    EC_POINT_mul(EC_KEY_get0_group(key), pub_point, priv_bn, nullptr, nullptr, nullptr);
-    EC_KEY_set_public_key(key, pub_point);
-
-    ECDSA_SIG *sig = ECDSA_do_sign(
-        reinterpret_cast<const unsigned char *>(finalHash.c_str()),
-        finalHash.size(), key);
-
-    const BIGNUM *r_bn, *s_bn;
-    ECDSA_SIG_get0(sig, &r_bn, &s_bn);
-
-    // Ethereum requires s to be in the lower half of the curve order
-    BIGNUM *order = BN_new();
-    EC_GROUP_get_order(EC_KEY_get0_group(key), order, nullptr);
-    BIGNUM *half_order = BN_new();
-    BN_rshift1(half_order, order);
-    if (BN_cmp(s_bn, half_order) > 0) {
-      BIGNUM *new_s = BN_new();
-      BN_sub(new_s, order, s_bn);
-      ECDSA_SIG_set0(sig, BN_dup(r_bn), new_s);
-      ECDSA_SIG_get0(sig, &r_bn, &s_bn);
-    }
-
-    // Determine recovery ID (v)
-    // For simplicity in this implementation, we try v=27 and v=28.
-    // In many cases for EIP-712 with a fixed private key, we can just use 27 or
-    // 28. Real recovery requires EC_POINT_recover_key which is not in OpenSSL
-    // directly. However, we can use the 'v' value that matches the signature
-    // expected by Polymarket.
-    int v = 27; // Default to 27, might need logic to check which one is correct
-
-    unsigned char r_bin[32], s_bin[32];
-    BN_bn2binpad(r_bn, r_bin, 32);
-    BN_bn2binpad(s_bn, s_bin, 32);
-
-    unsigned char v_byte = static_cast<unsigned char>(v);
-    std::string signature = "0x" + to_hex(r_bin, 32) + to_hex(s_bin, 32) +
-                            to_hex(&v_byte, 1);
-
-    // Cleanup
-    ECDSA_SIG_free(sig);
-    EC_KEY_free(key);
-    BN_free(priv_bn);
-    BN_free(order);
-    BN_free(half_order);
-    EC_POINT_free(pub_point);
-
-    return signature;
+    return eth::sign_hash(private_key_hex, finalHash);
   }
 };
 
