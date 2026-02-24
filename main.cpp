@@ -2,8 +2,22 @@
 #include "exchanges/kalshi/kalshi.hpp"
 #include "exchanges/polymarket/polymarket.hpp"
 #include <iostream>
+#include <thread>
 
-ExecutionEngine LiveExchange; // Global instance for testing
+struct MockEngine : public ExecutionEngine {
+  int64_t get_position(MarketId) const override { return 100; }
+  Price get_balance() const override { return Price::from_usd(10000); }
+  Price get_exposure() const override { return Price::from_usd(500); }
+  Price get_price(MarketId, bool) const override {
+    return Price::from_cents(52);
+  }
+  Price get_depth(MarketId, bool) const override {
+    return Price::from_cents(50);
+  }
+};
+
+MockEngine RealLiveExchange;
+ExecutionEngine &LiveExchange = RealLiveExchange;
 
 const char *tif_to_string(TimeInForce tif) {
   switch (tif) {
@@ -280,19 +294,49 @@ void auth_demo() {
   using namespace bop::exchanges;
 
   // Set Kalshi Credentials
-  const_cast<Kalshi &>(kalshi).credentials = {"my_api_key", "my_secret_key",
-                                              "my_passphrase", ""};
+  kalshi.set_credentials({"my_api_key", "my_secret_key", "my_passphrase", ""});
 
   std::string k_sign = kalshi.sign_request("GET", "/v2/exchange/status");
   std::cout << "Kalshi Signature: " << k_sign << std::endl;
 
   // Set Polymarket Credentials
-  const_cast<Polymarket &>(polymarket).credentials = {"", "0x_my_private_key",
-                                                      "", "0x_my_address"};
+  polymarket.set_credentials({"", "0x_my_private_key", "", "0x_my_address"});
 
   std::string p_sign =
       polymarket.sign_request("POST", "/orders", "{\"qty\":10}");
   std::cout << "Polymarket Signature: " << p_sign << std::endl;
+}
+
+void algo_logic_demo() {
+  std::cout << "\nRunning Execution Algorithm Logic Demo...\n";
+  using namespace bop::exchanges;
+
+  // 1. TWAP Demo (5 second TWAP)
+  auto twap_order =
+      Sell(1000_shares) / Market("BTC", kalshi) / NO + MarketPrice() |
+      TWAP(5_sec);
+  twap_order >> LiveExchange;
+
+  // 2. Trailing Stop Demo
+  auto trailing_stop = Sell(500_shares) / Market("BTC", polymarket) / YES +
+                       TrailingStop(Price(5_ticks));
+  trailing_stop >> LiveExchange;
+
+  // 3. Pegging Demo
+  auto peg_order =
+      Buy(200_shares) / Market("ETH", kalshi) / YES + Peg(Bid, Price(1_ticks));
+  peg_order >> LiveExchange;
+
+  std::cout << "Algo Manager now tracking " << GlobalAlgoManager.active_count()
+            << " algorithms." << std::endl;
+
+  // Simulate market ticks for 10 seconds (20 * 500ms)
+  for (int i = 0; i < 20; ++i) {
+    std::cout << "--- Tick " << i << " (Time: " << i * 0.5 << "s) ---"
+              << std::endl;
+    GlobalAlgoManager.tick(LiveExchange);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
 }
 
 int main() {
@@ -301,5 +345,6 @@ int main() {
   pro_strategy();
   arbitrage_strategy();
   auth_demo();
+  algo_logic_demo();
   return 0;
 }
