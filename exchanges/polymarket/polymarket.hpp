@@ -14,7 +14,7 @@ struct Polymarket : public StreamingMarketBackend {
 
   std::string name() const override { return "Polymarket"; }
 
-  void load_markets() override {
+  void sync_markets() override {
     std::string url = "https://gamma-api.polymarket.com/markets?active=true&limit=100";
     try {
       auto resp = Network.get(url);
