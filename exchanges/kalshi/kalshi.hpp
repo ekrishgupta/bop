@@ -59,8 +59,37 @@ struct Kalshi : public MarketBackend {
   }
 
   // --- Trading ---
-  std::string create_order(const Order &) const override {
-    return "kalshi_ord_123";
+  std::string create_order(const Order &o) const override {
+    std::string path = "/v2/portfolio/orders";
+    std::string url = "https://api.elections.kalshi.com/trade-api" + path;
+
+    json j;
+    j["action"] = o.is_buy ? "buy" : "sell";
+    j["amount"] = o.quantity;
+    j["market_ticker"] = o.market.ticker;
+    j["side"] = o.outcome_yes ? "yes" : "no";
+    j["type"] = (o.price.raw == 0) ? "market" : "limit";
+
+    if (o.price.raw != 0) {
+      if (o.outcome_yes)
+        j["yes_price"] = o.price.to_cents();
+      else
+        j["no_price"] = o.price.to_cents();
+    }
+
+    std::string body = j.dump();
+    try {
+      auto resp = Network.post(url, body, auth_headers("POST", path, body));
+      if (resp.status_code == 201 || resp.status_code == 200) {
+        auto res_j = resp.json_body();
+        return res_j["order"]["order_id"].get<std::string>();
+      } else {
+        std::cerr << "[KALSHI] Order Error: " << resp.body << std::endl;
+      }
+    } catch (const std::exception &e) {
+      std::cerr << "[KALSHI] Order Exception: " << e.what() << std::endl;
+    }
+    return "error";
   }
   bool cancel_order(const std::string &) const override { return true; }
 
