@@ -6,7 +6,7 @@ namespace bop::exchanges {
 
 struct Kalshi : public StreamingMarketBackend {
   Kalshi()
-      : StreamingMarketBackend(std::make_unique<ProductionWebSocketClient>()) {
+      : StreamingMarketBackend(std::make_unique<LiveWebSocketClient>()) {
     if (ws_)
       ws_->connect("wss://api.elections.kalshi.com/trade-api/v2/stream");
   }

@@ -6,7 +6,7 @@ namespace bop::exchanges {
 
 struct Polymarket : public StreamingMarketBackend {
   Polymarket()
-      : StreamingMarketBackend(std::make_unique<ProductionWebSocketClient>()) {
+      : StreamingMarketBackend(std::make_unique<LiveWebSocketClient>()) {
     if (ws_)
       ws_->connect("wss://clob.polymarket.com/ws");
   }

@@ -37,9 +37,9 @@ public:
 /**
  * @brief Production-grade implementation of a WebSocket client using IXWebSocket.
  */
-class ProductionWebSocketClient : public WebSocketClient {
+class LiveWebSocketClient : public WebSocketClient {
 public:
-  ProductionWebSocketClient() {
+  LiveWebSocketClient() {
     ws_.setOnMessageCallback([this](const ix::WebSocketMessagePtr &msg) {
       if (msg->type == ix::WebSocketMessageType::Message) {
         if (message_cb_)
@@ -57,8 +57,8 @@ public:
     });
 
     // Configure production-grade features:
-    // 1. Automated Heartbeats (Ping/Pong)
-    ws_.setPingInterval(30);
+    // 1. Automated Heartbeats (Ping/Pong) - Kalshi requires ~10s
+    ws_.setPingInterval(10);
 
     // 2. Automatic Reconnection logic
     ws_.enableAutomaticReconnection();
