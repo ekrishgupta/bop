@@ -1,4 +1,6 @@
 #include "bop.hpp"
+#include "core/dashboard.hpp"
+#include "core/algo.hpp"
 #include "exchanges/kalshi/kalshi.hpp"
 #include "exchanges/polymarket/polymarket.hpp"
 #include "exchanges/predictit/predictit.hpp"
@@ -7,7 +9,7 @@
 #include <iostream>
 #include <thread>
 
-LiveExecutionEngine RealLiveExchange;
+DashboardExecutionEngine RealLiveExchange;
 ExecutionEngine &LiveExchange = RealLiveExchange;
 
 const char *tif_to_string(TimeInForce tif) {

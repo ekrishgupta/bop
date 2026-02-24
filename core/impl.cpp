@@ -15,6 +15,7 @@ void ExecutionEngine::run() {
     is_running = true;
     std::cout << "[ENGINE] Starting default responsive event loop..." << std::endl;
     while (is_running) {
+      last_tick_time_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
       GlobalAlgoManager.tick(*this);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -72,6 +73,7 @@ void LiveExecutionEngine::run() {
 
       if (!is_running) break;
 
+      last_tick_time_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
       GlobalAlgoManager.tick(*this);
       check_kill_switch();
     }
@@ -160,10 +162,97 @@ void StreamingMarketBackend::notify_fill(const std::string &id, int qty, Price p
     }
 }
 
-void StreamingMarketBackend::notify_status(const std::string &id, OrderStatus status) {
+void LiveExecutionEngine::notify_status(const std::string &id, OrderStatus status) {
     if (engine_) {
         engine_->update_order_status(id, status);
     }
+}
+
+// --- Dispatch Operators ---
+
+void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+  bop::Order order_to_dispatch = o;
+
+  if (engine.limits.dynamic_sizing_enabled) {
+      order_to_dispatch.quantity = engine.calculate_dynamic_size(o);
+  }
+
+  uint64_t now =
+      std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  uint64_t latency = now - order_to_dispatch.creation_timestamp_ns;
+
+  if (!engine.check_risk(order_to_dispatch)) {
+    std::cout << "[ENGINE] Order rejected by risk engine." << std::endl;
+    return;
+  }
+
+  if (order_to_dispatch.algo_type != bop::AlgoType::None) {
+    std::cout << "[ALGO] Registering " << (int)order_to_dispatch.algo_type << " for "
+              << order_to_dispatch.market.ticker << std::endl;
+    bop::GlobalAlgoManager.submit(order_to_dispatch);
+    return;
+  }
+
+  if (order_to_dispatch.backend) {
+    std::string id;
+    if (order_to_dispatch.is_spread) {
+      std::cout << "[BACKEND] Dispatching spread order (" << order_to_dispatch.market.hash
+                << " - " << order_to_dispatch.market2.hash << ") to " << order_to_dispatch.backend->name()
+                << " (" << latency << " ns latency)" << std::endl;
+      id = order_to_dispatch.backend->create_order(order_to_dispatch);
+    } else {
+      std::cout << "[BACKEND] Dispatching to " << order_to_dispatch.backend->name() << " ("
+                << latency << " ns latency)" << std::endl;
+      id = order_to_dispatch.backend->create_order(order_to_dispatch);
+    }
+    
+    if (!id.empty() && id != "error") {
+      engine.track_order(id, order_to_dispatch);
+    }
+  } else {
+    if (order_to_dispatch.is_spread) {
+      std::cout << "[ENGINE] No backend bound for spread order ("
+                << order_to_dispatch.market.hash << " - " << order_to_dispatch.market2.hash
+                << "). Simulated latency: " << latency << " ns." << std::endl;
+    } else {
+      std::cout << "[ENGINE] No backend bound. Simulated latency: " << latency
+                << " ns." << std::endl;
+    }
+  }
+}
+
+void operator>>(std::initializer_list<bop::Order> batch,
+                       bop::ExecutionEngine &engine) {
+  if (batch.size() == 0)
+    return;
+
+  const bop::MarketBackend *common_backend = batch.begin()->backend;
+  bool all_same = true;
+  for (const auto &o : batch) {
+    if (o.backend != common_backend) {
+      all_same = false;
+      break;
+    }
+  }
+
+  if (all_same && common_backend) {
+    std::cout << "[BATCH] Dispatching " << batch.size() << " orders to "
+              << common_backend->name() << std::endl;
+    std::vector<bop::Order> orders(batch);
+    common_backend->create_batch_orders(orders);
+  } else {
+    std::cout << "[BATCH] Heterogeneous batch. Dispatching individually..."
+              << std::endl;
+    for (const auto &o : batch) {
+      o >> engine;
+    }
+  }
+}
+
+void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
+  std::cout << "[OCO] Dispatching OCO pair..." << std::endl;
+  oco.order1 >> engine;
+  oco.order2 >> engine;
 }
 
 } // namespace bop
