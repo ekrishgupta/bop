@@ -118,14 +118,44 @@ private:
       std::string pos_json = b->get_positions();
       try {
         auto j = nlohmann::json::parse(pos_json);
-        if (j.contains("positions")) {
+        
+        // Handle array directly (Polymarket CLOB style)
+        if (j.is_array()) {
+            for (const auto &p : j) {
+                std::string ticker;
+                if (p.contains("asset_id")) ticker = p["asset_id"];
+                else if (p.contains("token_id")) ticker = p["token_id"];
+
+                if (!ticker.empty() && p.contains("size")) {
+                    int64_t qty = std::stoll(p["size"].get<std::string>());
+                    new_positions[fnv1a(ticker.c_str())] += qty;
+                }
+            }
+        } 
+        // Handle Kalshi v2 style
+        else if (j.contains("market_positions")) {
+            for (const auto &p : j["market_positions"]) {
+                std::string ticker = p["ticker"];
+                int64_t qty = p["position"].get<int64_t>();
+                new_positions[fnv1a(ticker.c_str())] += qty;
+            }
+        }
+        // Handle generic 'positions' object
+        else if (j.contains("positions")) {
           for (const auto &p : j["positions"]) {
             std::string ticker;
             if (p.contains("market_ticker")) ticker = p["market_ticker"];
             else if (p.contains("token_id")) ticker = p["token_id"];
+            else if (p.contains("ticker")) ticker = p["ticker"];
 
             if (!ticker.empty()) {
-                int64_t qty = p["quantity"].get<int64_t>();
+                int64_t qty = 0;
+                if (p.contains("quantity")) qty = p["quantity"].get<int64_t>();
+                else if (p.contains("position")) qty = p["position"].get<int64_t>();
+                else if (p.contains("size")) {
+                    if (p["size"].is_string()) qty = std::stoll(p["size"].get<std::string>());
+                    else qty = p["size"].get<int64_t>();
+                }
                 new_positions[fnv1a(ticker.c_str())] += qty;
             }
           }
@@ -138,7 +168,7 @@ private:
       cached_balance = total_balance;
       cached_positions = std::move(new_positions);
     }
-    std::cout << "[LIVE ENGINE] Synced state: Balance=" << cached_balance << std::endl;
+    std::cout << "[LIVE ENGINE] Synced state: Balance=" << cached_balance << " Markets=" << cached_positions.size() << std::endl;
   }
 };
 
