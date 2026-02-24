@@ -20,7 +20,7 @@ struct Betfair : public StreamingMarketBackend {
   // Betfair requires a session token which is obtained via login
   std::string session_token;
 
-  void sync_markets() override {
+  void load_markets() override {
     if (credentials.api_key.empty()) return;
 
     std::string url = "https://api.betfair.com/exchange/betting/json-rpc/v1";

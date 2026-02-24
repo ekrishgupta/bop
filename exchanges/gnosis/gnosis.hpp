@@ -17,7 +17,7 @@ struct Gnosis : public StreamingMarketBackend {
 
   std::string name() const override { return "Gnosis"; }
 
-  void sync_markets() override {
+  void load_markets() override {
     // In a real implementation, this would query a subgraph
     ticker_to_id["GNOSIS_EXAMPLE"] = "0x123...456";
   }

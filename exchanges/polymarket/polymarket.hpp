@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../core/streaming_backend.hpp"
+#include <simdjson.h>
 
 namespace bop::exchanges {
 
@@ -13,7 +14,7 @@ struct Polymarket : public StreamingMarketBackend {
 
   std::string name() const override { return "Polymarket"; }
 
-  void sync_markets() override {
+  void load_markets() override {
     std::string url = "https://gamma-api.polymarket.com/markets?active=true&limit=100";
     try {
       auto resp = Network.get(url);

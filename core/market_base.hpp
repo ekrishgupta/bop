@@ -46,11 +46,11 @@ struct MarketBackend {
 
   void set_credentials(const auth::Credentials &creds) { credentials = creds; }
 
-  virtual void sync_markets() {}
+  virtual void load_markets() {}
 
   virtual std::string resolve_ticker(const std::string &ticker) const {
     if (ticker_to_id.empty()) {
-        const_cast<MarketBackend *>(this)->sync_markets();
+        const_cast<MarketBackend *>(this)->load_markets();
     }
 
     // 1. Exact match
