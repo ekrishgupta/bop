@@ -6,6 +6,9 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include <initializer_list>
 #include <type_traits>
@@ -23,82 +26,120 @@ struct ExecutionEngine {
   }
 
   virtual int64_t get_position(MarketId market) const {
-    int64_t total = 0;
-    for (auto b : backends_) {
-      // Find the position for this market on this backend
-      // We need a more efficient way if we have many markets/backends
-      // But for now, we'll try to get positions and parse
-      std::string pos_json = b->get_positions();
-      try {
-        auto j = nlohmann::json::parse(pos_json);
-        if (j.contains("positions")) {
-          for (const auto &p : j["positions"]) {
-            if (p.contains("market_ticker") &&
-                p["market_ticker"] == market.ticker) {
-              total += p["quantity"].get<int64_t>();
-            } else if (p.contains("token_id") &&
-                       p["token_id"] == market.ticker) {
-              total += p["quantity"].get<int64_t>();
-            }
-          }
-        }
-      } catch (...) {
-      }
-    }
-    return total;
+    return 0;
   }
 
   virtual Price get_balance() const {
-    Price total(0);
-    for (auto b : backends_) {
-      total = total + b->get_balance();
-    }
-    return total;
+    return Price(0);
   }
 
   virtual Price get_exposure() const { return Price(0); }
 
   virtual Price get_pnl() const {
-    Price total_pnl(0);
+    return Price(0);
+  }
+
+  virtual Price get_depth(MarketId market, bool is_bid) const {
     for (auto b : backends_) {
+        Price p = b->get_depth(market, is_bid);
+        if (p.raw > 0) return p;
+    }
+    return Price(0);
+  }
+
+  virtual Price get_price(MarketId market, bool outcome_yes) const {
+    for (auto b : backends_) {
+        Price p = b->get_price(market, outcome_yes);
+        if (p.raw > 0) return p;
+    }
+    return Price(0);
+  }
+
+  virtual int64_t get_volume(MarketId market) const { 
+    for (auto b : backends_) {
+        int64_t v = b->clob_get_last_trade_price(market).raw; // Fallback or specific volume call
+        // Many backends don't have a direct get_volume in the base class yet
+    }
+    return 0; 
+  }
+
+  virtual void stop() { is_running = false; }
+  virtual void run();
+};
+
+class LiveExecutionEngine : public ExecutionEngine {
+  mutable std::mutex mtx;
+  Price cached_balance{0};
+  std::unordered_map<uint32_t, int64_t> cached_positions;
+  std::thread sync_thread;
+
+public:
+  LiveExecutionEngine() = default;
+  ~LiveExecutionEngine() {
+    stop();
+    if (sync_thread.joinable()) sync_thread.join();
+  }
+
+  int64_t get_position(MarketId market) const override {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = cached_positions.find(market.hash);
+    return (it != cached_positions.end()) ? it->second : 0;
+  }
+
+  Price get_balance() const override {
+    std::lock_guard<std::mutex> lock(mtx);
+    return cached_balance;
+  }
+
+  void run() override {
+    is_running = true;
+    sync_thread = std::thread([this]() {
+      while (is_running) {
+        sync_state();
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+      }
+    });
+
+    std::cout << "[LIVE ENGINE] Starting event loop..." << std::endl;
+    while (is_running) {
+      GlobalAlgoManager.tick(*this);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+
+private:
+  void sync_state() {
+    Price total_balance(0);
+    std::unordered_map<uint32_t, int64_t> new_positions;
+
+    for (auto b : backends_) {
+      total_balance = total_balance + b->get_balance();
+      
       std::string pos_json = b->get_positions();
       try {
         auto j = nlohmann::json::parse(pos_json);
         if (j.contains("positions")) {
           for (const auto &p : j["positions"]) {
             std::string ticker;
-            if (p.contains("market_ticker"))
-              ticker = p["market_ticker"];
-            else if (p.contains("token_id"))
-              ticker = p["token_id"];
+            if (p.contains("market_ticker")) ticker = p["market_ticker"];
+            else if (p.contains("token_id")) ticker = p["token_id"];
 
             if (!ticker.empty()) {
-              int64_t qty = p["quantity"].get<int64_t>();
-              Price entry_price = Price::from_double(
-                  std::stod(p["avg_entry_price"].get<std::string>()));
-              Price current_price = b->get_price(MarketId(ticker.c_str()), true);
-
-              // Simple PnL: (current - entry) * qty
-              total_pnl = total_pnl + (current_price - entry_price) * qty;
+                int64_t qty = p["quantity"].get<int64_t>();
+                new_positions[fnv1a(ticker.c_str())] += qty;
             }
           }
         }
-      } catch (...) {
-      }
+      } catch (...) {}
     }
-    return total_pnl;
-  }
 
-  virtual Price get_depth(MarketId market, bool is_bid) const {
-    return Price(0);
+    {
+      std::lock_guard<std::mutex> lock(mtx);
+      cached_balance = total_balance;
+      cached_positions = std::move(new_positions);
+    }
+    std::cout << "[LIVE ENGINE] Synced state: Balance=" << cached_balance << std::endl;
   }
-  virtual Price get_price(MarketId market, bool outcome_yes) const {
-    return Price(0);
-  }
-  virtual int64_t get_volume(MarketId market) const { return 0; }
-
-  virtual void stop() { is_running = false; }
-  virtual void run();
 };
 
 } // namespace bop
