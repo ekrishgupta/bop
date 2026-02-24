@@ -34,6 +34,7 @@ template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
   const MarketBackend *backend = nullptr;
+  bool is_universal = false;
 
   inline MarketQuery<Tag> count() const { return *this; }
 };
@@ -45,46 +46,53 @@ template <typename L, typename R> struct OrCondition;
 struct MarketTarget {
   MarketId market;
   const MarketBackend *backend = nullptr;
+  bool is_universal = false;
 
   MarketTarget resolve() const {
     if (backend && !market.resolved) {
       std::string id = backend->resolve_ticker(market.ticker);
       if (id != market.ticker) {
-        return {MarketId(fnv1a(id.c_str()), id, true), backend};
+        return {MarketId(fnv1a(id.c_str()), id, true), backend, is_universal};
       }
     }
     return *this;
   }
 
+  inline MarketTarget Universal() const {
+      auto r = *this;
+      r.is_universal = true;
+      return r;
+  }
+
   inline MarketQuery<PriceTag> Price(YES_t) const {
     auto r = resolve();
-    return {r.market, true, r.backend};
+    return {r.market, true, r.backend, r.is_universal};
   }
   inline MarketQuery<PriceTag> Price(NO_t) const {
     auto r = resolve();
-    return {r.market, false, r.backend};
+    return {r.market, false, r.backend, r.is_universal};
   }
   inline MarketQuery<VolumeTag> Volume(YES_t) const {
     auto r = resolve();
-    return {r.market, true, r.backend};
+    return {r.market, true, r.backend, r.is_universal};
   }
   inline MarketQuery<VolumeTag> Volume(NO_t) const {
     auto r = resolve();
-    return {r.market, false, r.backend};
+    return {r.market, false, r.backend, r.is_universal};
   }
 
   // Market Depth Queries
   inline MarketQuery<DepthTag> Spread() const {
     auto r = resolve();
-    return {r.market, true, r.backend};
+    return {r.market, true, r.backend, r.is_universal};
   }
   inline MarketQuery<DepthTag> BestBid() const {
     auto r = resolve();
-    return {r.market, true, r.backend};
+    return {r.market, true, r.backend, r.is_universal};
   }
   inline MarketQuery<DepthTag> BestAsk() const {
     auto r = resolve();
-    return {r.market, false, r.backend};
+    return {r.market, false, r.backend, r.is_universal};
   }
 
   // Event Hooks
@@ -170,6 +178,62 @@ inline Order operator/(const MarketBoundSpread &m, NO_t) {
   o.is_spread = true;
   o.backend = m.backend;
   return o;
+}
+
+struct MarketBoundQuote {
+  int quantity;
+  MarketId market;
+  int64_t timestamp_ns;
+  const MarketBackend *backend = nullptr;
+  Price spread = Price::from_cents(2);
+  ReferencePrice ref = ReferencePrice::Mid;
+};
+
+inline MarketBoundQuote operator/(const Quote &q, MarketId market) {
+  return MarketBoundQuote{q.quantity, market, q.timestamp_ns};
+}
+
+inline MarketBoundQuote operator/(const Quote &q, const char *market) {
+  return MarketBoundQuote{q.quantity, MarketId(market), q.timestamp_ns};
+}
+
+inline MarketBoundQuote operator/(const Quote &q, MarketTarget target) {
+  auto r = target.resolve();
+  return MarketBoundQuote{q.quantity, r.market, q.timestamp_ns, r.backend};
+}
+
+struct Spread {
+    Price value;
+    explicit Spread(Price p) : value(p) {}
+};
+
+inline MarketBoundQuote operator|(MarketBoundQuote q, Spread s) {
+    q.spread = s.value;
+    return q;
+}
+
+struct Offset {
+    ReferencePrice ref;
+    explicit Offset(ReferencePrice r) : ref(r) {}
+};
+
+inline MarketBoundQuote operator|(MarketBoundQuote q, Offset o) {
+    q.ref = o.ref;
+    return q;
+}
+
+inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine) {
+    Order o;
+    o.market = q.market;
+    o.quantity = q.quantity;
+    o.backend = q.backend;
+    o.algo_type = AlgoType::MarketMaker;
+    o.algo_params = MarketMakerData{q.spread, q.ref};
+    o.creation_timestamp_ns = q.timestamp_ns;
+    
+    // Dispatch to engine
+    o >> engine;
+    return o;
 }
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
@@ -350,16 +414,20 @@ inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
 }
 
 // Global helper for DSL entry
-inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr}; }
+inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr, false}; }
 inline MarketTarget Market(const char *name) {
-  return {MarketId(name), nullptr};
+  return {MarketId(name), nullptr, false};
+}
+
+inline MarketTarget UniversalMarket(const char *name) {
+  return {MarketId(name), nullptr, true};
 }
 
 inline MarketTarget Market(MarketId mkt, const MarketBackend &b) {
-  return MarketTarget{mkt, &b}.resolve();
+  return MarketTarget{mkt, &b, false}.resolve();
 }
 inline MarketTarget Market(const char *name, const MarketBackend &b) {
-  return MarketTarget{MarketId(name), &b}.resolve();
+  return MarketTarget{MarketId(name), &b, false}.resolve();
 }
 
 inline MarketQuery<PositionTag> Position(MarketTarget target) {
@@ -385,6 +453,9 @@ inline Condition<ExposureTag, RiskQuery> Exposure() {
 inline Condition<PnLTag, RiskQuery> PnL() {
   return {{RiskQuery::Type::PnL}, 0, false};
 }
+
+inline bop::Spread Spread(Price p) { return bop::Spread(p); }
+inline bop::Offset Offset(ReferencePrice r) { return bop::Offset(r); }
 
 struct PortfolioBinder {
   PortfolioQuery::Metric metric;
