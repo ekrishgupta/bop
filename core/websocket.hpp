@@ -1,8 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <iostream>
-#include <memory>
+#include <ixwebsocket/IXWebSocket.h>
 #include <string>
 #include <vector>
 
@@ -36,29 +35,49 @@ public:
 };
 
 /**
- * @brief Default mock implementation of a WebSocket client.
+ * @brief Production-grade implementation of a WebSocket client using IXWebSocket.
  */
-class MockWebSocketClient : public WebSocketClient {
+class ProductionWebSocketClient : public WebSocketClient {
 public:
+  ProductionWebSocketClient() {
+    ws_.setOnMessageCallback([this](const ix::WebSocketMessagePtr &msg) {
+      if (msg->type == ix::WebSocketMessageType::Message) {
+        if (message_cb_)
+          message_cb_(msg->str);
+      } else if (msg->type == ix::WebSocketMessageType::Open) {
+        if (open_cb_)
+          open_cb_();
+      } else if (msg->type == ix::WebSocketMessageType::Close) {
+        if (close_cb_)
+          close_cb_();
+      } else if (msg->type == ix::WebSocketMessageType::Error) {
+        if (error_cb_)
+          error_cb_(msg->errorInfo.reason);
+      }
+    });
+
+    // Configure production-grade features:
+    // 1. Automated Heartbeats (Ping/Pong)
+    ws_.setPingInterval(30);
+
+    // 2. Automatic Reconnection logic
+    ws_.enableAutomaticReconnection();
+    ws_.setReconnectionDelay(1000);    // Start with 1s
+    ws_.setMaxReconnectionDelay(30000); // Max 30s
+  }
+
   void connect(const std::string &url) override {
-    connected_ = true;
-    std::cout << "[WS] Connected to " << url << std::endl;
-    if (open_cb_)
-      open_cb_();
+    ws_.setUrl(url);
+    ws_.start();
   }
 
-  void disconnect() override {
-    connected_ = false;
-    std::cout << "[WS] Disconnected" << std::endl;
-    if (close_cb_)
-      close_cb_();
+  void disconnect() override { ws_.stop(); }
+
+  bool is_connected() const override {
+    return ws_.getReadyState() == ix::ReadyState::Open;
   }
 
-  bool is_connected() const override { return connected_; }
-
-  void send(const std::string &message) override {
-    std::cout << "[WS] Sending: " << message << std::endl;
-  }
+  void send(const std::string &message) override { ws_.send(message); }
 
   void on_open(std::function<void()> cb) override { open_cb_ = cb; }
   void on_close(std::function<void()> cb) override { close_cb_ = cb; }
@@ -71,20 +90,12 @@ public:
 
   void subscribe(const std::string &channel,
                  const std::vector<std::string> &symbols) override {
-    std::cout << "[WS] Subscribing to channel: " << channel << " for symbols: ";
-    for (const auto &s : symbols)
-      std::cout << s << " ";
-    std::cout << std::endl;
-  }
-
-  // Simulation tool: trigger a message
-  void simulate_message(const std::string &msg) {
-    if (message_cb_)
-      message_cb_(msg);
+    // Exchange-specific subscription logic is typically handled in backends,
+    // but this provides a hook if needed.
   }
 
 private:
-  bool connected_ = false;
+  ix::WebSocket ws_;
   std::function<void()> open_cb_;
   std::function<void()> close_cb_;
   std::function<void(const std::string &)> error_cb_;
