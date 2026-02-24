@@ -35,6 +35,7 @@ class TrailingStopAlgo : public ExecutionAlgo {
   Price best_price;
   Price trail_amount;
   std::string active_order_id;
+  int64_t last_log_time_ns = 0;
   bool activated = false;
 
 public:

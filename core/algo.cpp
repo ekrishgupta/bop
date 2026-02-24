@@ -27,12 +27,18 @@ bool TWAPAlgo::tick(ExecutionEngine &engine) {
         return true;
     }
 
-    double target_qty = (elapsed_sec / (double)duration_sec) * total_qty;
-    int to_fill = static_cast<int>(target_qty) - filled_qty;
+    // Slice at most once every 5 seconds or if we are at the very beginning
+    bool interval_passed = (last_slice_time_ns == 0) || (now_ns - last_slice_time_ns > 5e9);
+    
+    if (interval_passed) {
+        double target_qty = (elapsed_sec / (double)duration_sec) * total_qty;
+        int to_fill = static_cast<int>(target_qty) - filled_qty;
 
-    if (to_fill > 0) {
-        dispatch_slice(to_fill, engine);
-        filled_qty += to_fill;
+        if (to_fill > 0) {
+            dispatch_slice(to_fill, engine);
+            filled_qty += to_fill;
+            last_slice_time_ns = now_ns;
+        }
     }
     return false;
 }
@@ -59,10 +65,13 @@ bool TrailingStopAlgo::tick(ExecutionEngine &engine) {
     Price current_price = engine.get_price(parent_order.market, parent_order.outcome_yes);
     if (current_price.raw == 0) return false;
 
+    int64_t now_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+
     if (!activated) {
-        std::cout << "[ALGO] Trailing Stop Activated for " << parent_order.market.ticker << " at " << current_price << std::endl;
+        std::cout << "[ALGO] Trailing Stop Activated for " << parent_order.market.ticker << " at " << current_price << " (Trail: " << trail_amount << ")" << std::endl;
         best_price = current_price;
         activated = true;
+        last_log_time_ns = now_ns;
         return false;
     }
 
@@ -70,18 +79,24 @@ bool TrailingStopAlgo::tick(ExecutionEngine &engine) {
 
     if (price_improved) {
         best_price = current_price;
-        std::cout << "[ALGO] Trailing Stop Updated Best Price: " << best_price << std::endl;
+        std::cout << "[ALGO] Trailing Stop Updated Best Price: " << best_price << " (Current: " << current_price << ")" << std::endl;
     }
 
     Price stop_price = parent_order.is_buy ? (best_price + trail_amount) : (best_price - trail_amount);
 
+    // Log status every 10 seconds
+    if (now_ns - last_log_time_ns > 10e9) {
+        std::cout << "[ALGO] Trailing Stop [" << parent_order.market.ticker << "] Current: " << current_price << " Best: " << best_price << " Stop: " << stop_price << std::endl;
+        last_log_time_ns = now_ns;
+    }
+
     bool triggered = parent_order.is_buy ? (current_price >= stop_price) : (current_price <= stop_price);
 
     if (triggered) {
-        std::cout << "[ALGO] Trailing Stop Triggered at " << current_price << " (Best: " << best_price << ")" << std::endl;
+        std::cout << "[ALGO] Trailing Stop Triggered! Market: " << parent_order.market.ticker << " at " << current_price << " (Best: " << best_price << ", Stop: " << stop_price << ")" << std::endl;
         Order market_order = parent_order;
         market_order.algo_type = AlgoType::None;
-        market_order.price = Price(0);
+        market_order.price = Price(0); // Market order
         if (market_order.backend) {
             market_order.backend->create_order(market_order);
         }
@@ -99,6 +114,8 @@ PegAlgo::PegAlgo(const Order &o) {
 }
 
 bool PegAlgo::tick(ExecutionEngine &engine) {
+    int64_t now_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    
     Price bbo_price;
     if (ref == ReferencePrice::Mid) {
         Price bid = engine.get_depth(parent_order.market, true);
@@ -115,6 +132,11 @@ bool PegAlgo::tick(ExecutionEngine &engine) {
     Price target_price = bbo_price + offset;
 
     if (target_price != last_quoted_price) {
+        // Throttle updates to at most once every 500ms
+        if (last_update_time_ns != 0 && (now_ns - last_update_time_ns < 500e6)) {
+            return false;
+        }
+
         if (!active_order_id.empty() && parent_order.backend) {
             parent_order.backend->cancel_order(active_order_id);
         }
@@ -124,10 +146,11 @@ bool PegAlgo::tick(ExecutionEngine &engine) {
         slice.algo_type = AlgoType::None;
 
         if (slice.backend) {
-            std::cout << "[ALGO] Pegging " << parent_order.market.ticker << " to " << target_price << std::endl;
+            std::cout << "[ALGO] Pegging " << parent_order.market.ticker << " to " << target_price << " (Offset: " << offset << ")" << std::endl;
             active_order_id = slice.backend->create_order(slice);
         }
         last_quoted_price = target_price;
+        last_update_time_ns = now_ns;
     }
     return false;
 }
