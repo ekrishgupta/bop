@@ -130,6 +130,19 @@ struct Kalshi : public StreamingMarketBackend {
     return Price(0);
   }
 
+  std::string get_positions() const override {
+    std::string path = "/v2/portfolio/positions";
+    std::string url = "https://api.elections.kalshi.com/trade-api" + path;
+    try {
+      auto resp = Network.get(url, auth_headers("GET", path));
+      if (resp.status_code == 200) {
+        return resp.body;
+      }
+    } catch (...) {
+    }
+    return "{\"positions\": []}";
+  }
+
   PortfolioSummary get_portfolio_summary() const override {
     return {get_balance(), Price(0), Price(0), Price(0)};
   }
