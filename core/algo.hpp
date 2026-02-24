@@ -9,6 +9,14 @@ namespace bop {
 
 struct ExecutionEngine;
 
+template <typename Derived>
+class AlgoCRTP {
+public:
+    bool tick(ExecutionEngine& engine) {
+        return static_cast<Derived*>(this)->tick_impl(engine);
+    }
+};
+
 class ExecutionAlgo {
 public:
   virtual ~ExecutionAlgo() = default;
@@ -16,7 +24,7 @@ public:
   Order parent_order;
 };
 
-class TWAPAlgo : public ExecutionAlgo {
+class TWAPAlgo : public ExecutionAlgo, public AlgoCRTP<TWAPAlgo> {
   int64_t duration_sec;
   int64_t start_time_ns;
   int64_t last_slice_time_ns = 0;
@@ -25,13 +33,14 @@ class TWAPAlgo : public ExecutionAlgo {
 
 public:
   TWAPAlgo(const Order &o);
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
 
 private:
   void dispatch_slice(int qty, ExecutionEngine &engine);
 };
 
-class TrailingStopAlgo : public ExecutionAlgo {
+class TrailingStopAlgo : public ExecutionAlgo, public AlgoCRTP<TrailingStopAlgo> {
   Price best_price;
   Price trail_amount;
   std::string active_order_id;
@@ -40,10 +49,11 @@ class TrailingStopAlgo : public ExecutionAlgo {
 
 public:
   TrailingStopAlgo(const Order &o);
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
 };
 
-class PegAlgo : public ExecutionAlgo {
+class PegAlgo : public ExecutionAlgo, public AlgoCRTP<PegAlgo> {
   Price offset;
   ReferencePrice ref;
   Price last_quoted_price = Price(-1);
@@ -52,10 +62,11 @@ class PegAlgo : public ExecutionAlgo {
 
 public:
   PegAlgo(const Order &o);
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
 };
 
-class VWAPAlgo : public ExecutionAlgo {
+class VWAPAlgo : public ExecutionAlgo, public AlgoCRTP<VWAPAlgo> {
   double participation_rate;
   int total_qty;
   int filled_qty = 0;
@@ -64,10 +75,11 @@ class VWAPAlgo : public ExecutionAlgo {
 
 public:
   VWAPAlgo(const Order &o);
-  bool tick(ExecutionEngine &engine) override;
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
 };
 
-class ArbitrageAlgo : public ExecutionAlgo {
+class ArbitrageAlgo : public ExecutionAlgo, public AlgoCRTP<ArbitrageAlgo> {
   MarketId m1;
   MarketId m2;
   const MarketBackend *b1;
@@ -79,6 +91,19 @@ class ArbitrageAlgo : public ExecutionAlgo {
 public:
   ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
                 const MarketBackend *b2, Price min_profit, int qty);
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
+};
+
+class MarketMakerAlgo : public ExecutionAlgo {
+  Price spread;
+  ReferencePrice ref;
+  std::string bid_id;
+  std::string ask_id;
+  Price last_ref_price = Price(-1);
+
+public:
+  MarketMakerAlgo(const Order &o);
   bool tick(ExecutionEngine &engine) override;
 };
 

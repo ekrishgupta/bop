@@ -13,7 +13,7 @@ TWAPAlgo::TWAPAlgo(const Order &o) {
     start_time_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
 
-bool TWAPAlgo::tick(ExecutionEngine &engine) {
+bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
     int64_t now_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     double elapsed_sec = (now_ns - start_time_ns) / 1e9;
 
@@ -61,7 +61,7 @@ TrailingStopAlgo::TrailingStopAlgo(const Order &o) {
     best_price = Price(0);
 }
 
-bool TrailingStopAlgo::tick(ExecutionEngine &engine) {
+bool TrailingStopAlgo::tick_impl(ExecutionEngine &engine) {
     Price current_price = engine.get_price(parent_order.market, parent_order.outcome_yes);
     if (current_price.raw == 0) return false;
 
@@ -113,7 +113,7 @@ PegAlgo::PegAlgo(const Order &o) {
     ref = data.ref;
 }
 
-bool PegAlgo::tick(ExecutionEngine &engine) {
+bool PegAlgo::tick_impl(ExecutionEngine &engine) {
     int64_t now_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     
     Price bbo_price;
@@ -162,7 +162,7 @@ VWAPAlgo::VWAPAlgo(const Order &o) {
     total_qty = o.quantity;
 }
 
-bool VWAPAlgo::tick(ExecutionEngine &engine) {
+bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
     if (filled_qty >= total_qty) {
         std::cout << "[ALGO] VWAP Completed for " << parent_order.market.ticker << std::endl;
         return true;
@@ -212,7 +212,7 @@ ArbitrageAlgo::ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
                              const MarketBackend *b2, Price min_profit, int qty)
     : m1(m1), m2(m2), b1(b1), b2(b2), min_profit(min_profit), quantity(qty) {}
 
-bool ArbitrageAlgo::tick(ExecutionEngine &engine) {
+bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     if (!active) return true;
 
     // We check prices on both backends
@@ -258,6 +258,75 @@ bool ArbitrageAlgo::tick(ExecutionEngine &engine) {
         return true;
     }
 
+    return false;
+}
+
+// MarketMakerAlgo Implementation
+MarketMakerAlgo::MarketMakerAlgo(const Order &o) {
+    parent_order = o;
+    auto data = std::get<MarketMakerData>(o.algo_params);
+    spread = data.spread;
+    ref = data.ref;
+}
+
+bool MarketMakerAlgo::tick(ExecutionEngine &engine) {
+    Price ref_price;
+    if (ref == ReferencePrice::Mid) {
+        Price bid = engine.get_depth(parent_order.market, true);
+        Price ask = engine.get_depth(parent_order.market, false);
+        if (bid.raw == 0 || ask.raw == 0) return false;
+        ref_price = Price((bid.raw + ask.raw) / 2);
+    } else {
+        bool is_bid = (ref == ReferencePrice::Bid);
+        ref_price = engine.get_depth(parent_order.market, is_bid);
+    }
+
+    if (ref_price.raw == 0) return false;
+
+    // Check if one side was filled
+    if (!bid_id.empty() || !ask_id.empty()) {
+        auto records = engine.get_orders();
+        for (const auto& r : records) {
+            if (r.id == bid_id && r.status == OrderStatus::Filled) {
+                std::cout << "[ALGO] MarketMaker: Bid side filled. Cancelling ask." << std::endl;
+                if (!ask_id.empty() && parent_order.backend) parent_order.backend->cancel_order(ask_id);
+                bid_id = ""; ask_id = "";
+                return true; 
+            }
+            if (r.id == ask_id && r.status == OrderStatus::Filled) {
+                std::cout << "[ALGO] MarketMaker: Ask side filled. Cancelling bid." << std::endl;
+                if (!bid_id.empty() && parent_order.backend) parent_order.backend->cancel_order(bid_id);
+                bid_id = ""; ask_id = "";
+                return true;
+            }
+        }
+    }
+
+    Price target_bid = ref_price - Price(spread.raw / 2);
+    Price target_ask = ref_price + Price(spread.raw / 2);
+
+    if (ref_price != last_ref_price) {
+        if (!bid_id.empty() && parent_order.backend) parent_order.backend->cancel_order(bid_id);
+        if (!ask_id.empty() && parent_order.backend) parent_order.backend->cancel_order(ask_id);
+
+        Order bid = parent_order;
+        bid.is_buy = true;
+        bid.price = target_bid;
+        bid.algo_type = AlgoType::None;
+
+        Order ask = parent_order;
+        ask.is_buy = false;
+        ask.price = target_ask;
+        ask.algo_type = AlgoType::None;
+
+        if (parent_order.backend) {
+            std::cout << "[ALGO] MarketMaker: Quoting " << parent_order.market.ticker 
+                      << " Bid: " << target_bid << " Ask: " << target_ask << std::endl;
+            bid_id = parent_order.backend->create_order(bid);
+            ask_id = parent_order.backend->create_order(ask);
+        }
+        last_ref_price = ref_price;
+    }
     return false;
 }
 
