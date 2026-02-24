@@ -2,3 +2,8 @@ bop_demo
 *.o
 .DS_Store
 build/
+main
+*.db
+*.sqlite
+backtest_data.csv
+backtest_data.json
