@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/core
+    ${PROJECT_SOURCE_DIR}/core/external
     ${PROJECT_SOURCE_DIR}/exchanges
     ${PROJECT_SOURCE_DIR}/include
 )
@@ -22,7 +23,7 @@ include(FetchContent)
 FetchContent_Declare(
   simdjson
   GIT_REPOSITORY https://github.com/simdjson/simdjson.git
-  GIT_TAG v3.6.4
+  GIT_TAG v3.10.1
 )
 FetchContent_MakeAvailable(simdjson)
 
