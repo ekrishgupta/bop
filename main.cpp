@@ -404,6 +404,12 @@ int main() {
        Peg(Bid, Price(1_ticks)));
   risk_strategy >> LiveExchange;
 
+  // Strategy D: Order Lifecycle Management (Don't layer orders)
+  auto managed_strategy =
+      When(OpenOrders(Market("BTC", kalshi)).count() < 1) >>
+      (Buy(100_shares) / Market("BTC", kalshi) / YES + LimitPrice(Price(50_ticks)));
+  managed_strategy >> LiveExchange;
+
   // Strategy C: Execution Algorithms (TWAP/VWAP)
   auto twap_order =
       Sell(5000_shares) / Market("BTC", kalshi) / NO + MarketPrice() |

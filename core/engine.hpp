@@ -17,10 +17,19 @@
 
 namespace bop {
 
+struct RiskLimits {
+  int64_t max_position_size = 10000;
+  Price max_market_exposure = Price::from_usd(5000);
+  double fat_finger_threshold = 0.10; // 10% deviation from BBO
+  Price daily_loss_limit = Price::from_usd(1000);
+};
+
 struct ExecutionEngine {
   std::atomic<bool> is_running{false};
   mutable std::vector<const MarketBackend *> backends_;
   OrderTracker order_store;
+  RiskLimits limits;
+  std::atomic<int64_t> current_daily_pnl_raw{0};
 
   virtual ~ExecutionEngine() = default;
 
@@ -50,10 +59,65 @@ struct ExecutionEngine {
 
   void add_order_fill(const std::string &id, int qty, Price price) {
     order_store.add_fill(id, qty, price);
+    
+    // Real-time realized PnL tracking for kill-switch
+    // simplified: Buy reduces cash, Sell increases cash. 
+    // Net delta from starting balance is a proxy for daily pnl.
+    bool is_buy = true;
+    for (auto const& r : order_store.get_all()) {
+        if (r.id == id) {
+            is_buy = r.order.is_buy;
+            break;
+        }
+    }
+
+    if (is_buy) current_daily_pnl_raw -= (qty * price.raw);
+    else current_daily_pnl_raw += (qty * price.raw);
+  }
+
+  // Risk Management
+  bool check_risk(const Order &o) const {
+    if (std::abs(current_daily_pnl_raw.load()) >= limits.daily_loss_limit.raw && current_daily_pnl_raw.load() < 0) {
+        std::cerr << "[RISK] KILL-SWITCH: Daily loss limit reached. Rejecting order." << std::endl;
+        return false;
+    }
+
+    // 1. Max Position Size
+    int64_t current_pos = get_position(o.market);
+    if (std::abs(current_pos + (o.is_buy ? o.quantity : -o.quantity)) > limits.max_position_size) {
+        std::cerr << "[RISK] Max position size exceeded for " << o.market.ticker << std::endl;
+        return false;
+    }
+
+    // 2. Fat-Finger Price Protection
+    if (o.price.raw > 0) {
+        Price bbo = get_price(o.market, o.outcome_yes);
+        if (bbo.raw > 0) {
+            double deviation = std::abs((double)o.price.raw - bbo.raw) / bbo.raw;
+            if (deviation > limits.fat_finger_threshold) {
+                std::cerr << "[RISK] Fat-finger protection: Price " << o.price 
+                          << " deviates " << (deviation * 100) << "% from BBO " << bbo << std::endl;
+                return false;
+            }
+        }
+    }
+
+    return true;
+  }
+
+  void check_kill_switch() {
+    if (current_daily_pnl_raw.load() <= -limits.daily_loss_limit.raw) {
+        std::cerr << "[RISK] CRITICAL: Daily loss limit hit (" << Price(current_daily_pnl_raw.load()) << "). Activating kill-switch." << std::endl;
+        stop();
+    }
   }
 
   std::vector<OrderRecord> get_orders() {
     return order_store.get_all();
+  }
+
+  virtual size_t get_open_order_count(MarketId market) const {
+    return const_cast<ExecutionEngine *>(this)->order_store.count_open(market);
   }
 
   virtual int64_t get_position(MarketId market) const {
@@ -200,6 +264,7 @@ public:
       if (!is_running) break;
 
       GlobalAlgoManager.tick(*this);
+      check_kill_switch();
     }
   }
 
@@ -279,6 +344,11 @@ inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
   uint64_t now =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
   uint64_t latency = now - o.creation_timestamp_ns;
+
+  if (!engine.check_risk(o)) {
+    std::cout << "[ENGINE] Order rejected by risk engine." << std::endl;
+    return;
+  }
 
   if (o.algo_type != bop::AlgoType::None) {
     std::cout << "[ALGO] Registering " << (int)o.algo_type << " for "
@@ -386,6 +456,9 @@ inline bool Condition<Tag, Q>::eval() const {
                     ? query.backend->get_depth(query.market, query.outcome_yes)
                     : LiveExchange.get_depth(query.market, query.outcome_yes);
     return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
+    size_t val = LiveExchange.get_open_order_count(query.market);
+    return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
   }
   return false;
 }

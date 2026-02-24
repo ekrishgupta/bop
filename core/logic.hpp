@@ -15,6 +15,7 @@ struct ExposureTag {};
 struct PnLTag {};
 struct SpreadTag {};
 struct DepthTag {};
+struct OpenOrdersTag {};
 
 struct RiskQuery {
   enum class Type { Exposure, PnL };
@@ -25,6 +26,8 @@ template <typename Tag> struct MarketQuery {
   MarketId market;
   bool outcome_yes;
   const MarketBackend *backend = nullptr;
+
+  inline MarketQuery<Tag> count() const { return *this; }
 };
 
 struct BalanceQuery {};
@@ -347,6 +350,8 @@ inline MarketQuery<PositionTag> Position(MarketTarget target) {
 }
 
 inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
+
+inline MarketQuery<OpenOrdersTag> OpenOrders(MarketId mkt) { return {mkt, true}; }
 
 inline BalanceQuery Balance() { return {}; }
 
