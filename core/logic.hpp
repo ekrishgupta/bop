@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "market_base.hpp"
+#include <functional>
 
 namespace bop {
 
@@ -36,28 +37,40 @@ struct MarketTarget {
   MarketId market;
   const MarketBackend *backend = nullptr;
 
-  constexpr MarketQuery<PriceTag> Price(YES_t) const {
+  inline MarketQuery<PriceTag> Price(YES_t) const {
     return {market, true, backend};
   }
-  constexpr MarketQuery<PriceTag> Price(NO_t) const {
+  inline MarketQuery<PriceTag> Price(NO_t) const {
     return {market, false, backend};
   }
-  constexpr MarketQuery<VolumeTag> Volume(YES_t) const {
+  inline MarketQuery<VolumeTag> Volume(YES_t) const {
     return {market, true, backend};
   }
-  constexpr MarketQuery<VolumeTag> Volume(NO_t) const {
+  inline MarketQuery<VolumeTag> Volume(NO_t) const {
     return {market, false, backend};
   }
 
   // Market Depth Queries
-  constexpr MarketQuery<DepthTag> Spread() const {
+  inline MarketQuery<DepthTag> Spread() const {
     return {market, true, backend};
   }
-  constexpr MarketQuery<DepthTag> BestBid() const {
+  inline MarketQuery<DepthTag> BestBid() const {
     return {market, true, backend};
   }
-  constexpr MarketQuery<DepthTag> BestAsk() const {
+  inline MarketQuery<DepthTag> BestAsk() const {
     return {market, false, backend};
+  }
+
+  // WebSocket Streaming Entry Points
+  inline void
+  OnOrderbook(std::function<void(const OrderBook &)> callback) const {
+    if (backend)
+      backend->ws_subscribe_orderbook(market, callback);
+  }
+
+  inline void OnTrade(std::function<void(bop::Price, int64_t)> callback) const {
+    if (backend)
+      backend->ws_subscribe_trades(market, callback);
   }
 };
 
@@ -65,10 +78,11 @@ struct MarketTarget {
 struct SpreadTarget {
   MarketId m1;
   MarketId m2;
+  const MarketBackend *backend = nullptr;
 };
 
 inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
-  return {a.market, b.market};
+  return {a.market, b.market, a.backend};
 }
 
 struct MarketBoundSpread {
@@ -76,19 +90,30 @@ struct MarketBoundSpread {
   bool is_buy;
   SpreadTarget spread;
   int64_t timestamp_ns;
+  const MarketBackend *backend = nullptr;
 };
 
 inline MarketBoundSpread operator/(const Buy &b, SpreadTarget spread) {
-  return {b.quantity, true, spread, b.timestamp_ns};
+  return {b.quantity, true, spread, b.timestamp_ns, spread.backend};
 }
 
 inline MarketBoundSpread operator/(const Sell &s, SpreadTarget spread) {
-  return {s.quantity, false, spread, s.timestamp_ns};
+  return {s.quantity, false, spread, s.timestamp_ns, spread.backend};
 }
 
 inline Order operator/(const MarketBoundSpread &m, YES_t) {
-  Order o{m.spread.m1, m.quantity, m.is_buy, true, 0, m.timestamp_ns};
-  o.algo_type = AlgoType::None;
+  Order o{m.spread.m1, m.quantity, m.is_buy, true, Price(0), m.timestamp_ns};
+  o.market2 = m.spread.m2;
+  o.is_spread = true;
+  o.backend = m.backend;
+  return o;
+}
+
+inline Order operator/(const MarketBoundSpread &m, NO_t) {
+  Order o{m.spread.m1, m.quantity, m.is_buy, false, Price(0), m.timestamp_ns};
+  o.market2 = m.spread.m2;
+  o.is_spread = true;
+  o.backend = m.backend;
   return o;
 }
 
@@ -96,8 +121,7 @@ template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   Q query;
   int64_t threshold;
   bool is_greater;
-  constexpr Condition(Q q, int64_t t, bool g)
-      : query(q), threshold(t), is_greater(g) {}
+  Condition(Q q, int64_t t, bool g) : query(q), threshold(t), is_greater(g) {}
 
   bool eval() const;
 };
@@ -112,12 +136,12 @@ template <typename Tag> struct RelativeCondition {
 
 // Logical Operators for Conditions
 template <typename L, typename R>
-constexpr AndCondition<L, R> operator&&(const L &l, const R &r) {
+inline AndCondition<L, R> operator&&(const L &l, const R &r) {
   return {l, r};
 }
 
 template <typename L, typename R>
-constexpr OrCondition<L, R> operator||(const L &l, const R &r) {
+inline OrCondition<L, R> operator||(const L &l, const R &r) {
   return {l, r};
 }
 
@@ -125,13 +149,13 @@ constexpr OrCondition<L, R> operator||(const L &l, const R &r) {
 template <typename L, typename R> struct AndCondition {
   L left;
   R right;
-  bool eval() const { return left.eval() && right.eval(); }
+  inline bool eval() const { return left.eval() && right.eval(); }
 };
 
 template <typename L, typename R> struct OrCondition {
   L left;
   R right;
-  bool eval() const { return left.eval() || right.eval(); }
+  inline bool eval() const { return left.eval() || right.eval(); }
 };
 
 template <typename T> struct ConditionalOrder {
@@ -147,12 +171,12 @@ template <typename T> struct WhenBinder {
   T condition;
 };
 
-template <typename T> constexpr WhenBinder<T> When(T c) { return {c}; }
+template <typename T> inline WhenBinder<T> When(T c) { return {c}; }
 
 struct OCOOrder {
   Order order1;
   Order order2;
-  bool eval() const { return true; }
+  inline bool eval() const { return true; }
 };
 
 inline OCOOrder Either(Order &&o1, Order &&o2) {
@@ -187,114 +211,106 @@ inline MarketBoundOrder operator/(const Sell &s, MarketTarget target) {
 
 // Relative Comparisons
 template <typename Tag>
-constexpr RelativeCondition<Tag> operator<(MarketQuery<Tag> a,
-                                           MarketQuery<Tag> b) {
+inline RelativeCondition<Tag> operator<(MarketQuery<Tag> a,
+                                        MarketQuery<Tag> b) {
   return {a, b, false};
 }
 
 template <typename Tag>
-constexpr RelativeCondition<Tag> operator>(MarketQuery<Tag> a,
-                                           MarketQuery<Tag> b) {
+inline RelativeCondition<Tag> operator>(MarketQuery<Tag> a,
+                                        MarketQuery<Tag> b) {
   return {a, b, true};
 }
 
 // Price Comparisons
-constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q,
-                                        int64_t ticks) {
-  return {q, ticks, true};
+inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, Price threshold) {
+  return {q, threshold.raw, true};
 }
-constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q,
-                                        int64_t ticks) {
-  return {q, ticks, false};
+inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, Price threshold) {
+  return {q, threshold.raw, false};
 }
 
-constexpr Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
-  return {q, static_cast<int64_t>(price * 100), true};
+inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
+  return {q, Price::from_double(price).raw, true};
 }
-constexpr Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
-  return {q, static_cast<int64_t>(price * 100), false};
+inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
+  return {q, Price::from_double(price).raw, false};
 }
 
 // Volume Comparisons
-constexpr Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
+inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), true};
 }
-constexpr Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
+inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
   return {q, static_cast<int64_t>(t), false};
 }
 
 // Depth Comparisons
-constexpr Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
-                                        int64_t threshold) {
+inline Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
+                                     int64_t threshold) {
   return {q, threshold, false};
 }
-constexpr Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
-                                        int64_t threshold) {
+inline Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
+                                     int64_t threshold) {
   return {q, threshold, true};
 }
 
 // Position comparisons
-constexpr Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
-                                           int64_t shares) {
+inline Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
+                                        int64_t shares) {
   return {q, shares, true};
 }
-constexpr Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
-                                           int64_t shares) {
+inline Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
+                                        int64_t shares) {
   return {q, shares, false};
 }
 
 // Balance comparisons
-constexpr Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
-                                                        int64_t amount) {
+inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
+                                                     int64_t amount) {
   return {q, amount, true};
 }
-constexpr Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
-                                                        int64_t amount) {
+inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
+                                                     int64_t amount) {
   return {q, amount, false};
 }
 
-} // namespace bop
-
 // Global helper for DSL entry
-constexpr bop::MarketTarget Market(bop::MarketId mkt) { return {mkt, nullptr}; }
-constexpr bop::MarketTarget Market(const char *name) {
-  return {bop::MarketId(bop::fnv1a(name)), nullptr};
+inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr}; }
+inline MarketTarget Market(const char *name) {
+  return {MarketId(name), nullptr};
 }
 
-constexpr bop::MarketTarget Market(bop::MarketId mkt,
-                                   const bop::MarketBackend &b) {
+inline MarketTarget Market(MarketId mkt, const MarketBackend &b) {
   return {mkt, &b};
 }
-constexpr bop::MarketTarget Market(const char *name,
-                                   const bop::MarketBackend &b) {
-  return {bop::MarketId(bop::fnv1a(name)), &b};
+inline MarketTarget Market(const char *name, const MarketBackend &b) {
+  return {MarketId(name), &b};
 }
 
-constexpr bop::MarketQuery<bop::PositionTag> Position(bop::MarketId mkt) {
-  return {mkt, true};
+inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
+
+inline BalanceQuery Balance() { return {}; }
+
+inline Condition<ExposureTag, RiskQuery> Exposure() {
+  return {{RiskQuery::Type::Exposure}, 0, false};
 }
 
-constexpr bop::BalanceQuery Balance() { return {}; }
-
-constexpr bop::Condition<bop::ExposureTag, bop::RiskQuery> Exposure() {
-  return {{bop::RiskQuery::Type::Exposure}, 0, false};
-}
-
-constexpr bop::Condition<bop::PnLTag, bop::RiskQuery> PnL() {
-  return {{bop::RiskQuery::Type::PnL}, 0, false};
+inline Condition<PnLTag, RiskQuery> PnL() {
+  return {{RiskQuery::Type::PnL}, 0, false};
 }
 
 // Exposure/PnL comparisons
-inline bop::Condition<bop::ExposureTag, bop::RiskQuery>
-operator<(bop::Condition<bop::ExposureTag, bop::RiskQuery> c,
-          long long threshold) {
+inline Condition<ExposureTag, RiskQuery>
+operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
   c.threshold = threshold;
   c.is_greater = false;
   return c;
 }
 
 // Batch DSL Entry
-inline std::initializer_list<bop::Order>
-Batch(std::initializer_list<bop::Order> list) {
+inline std::initializer_list<Order> Batch(std::initializer_list<Order> list) {
   return list;
 }
+
+} // namespace bop
