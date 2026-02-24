@@ -24,13 +24,24 @@ struct Polymarket : public StreamingMarketBackend {
           std::string cond_id = m["conditionId"];
           
           ticker_to_id[slug] = cond_id;
+          if (m.contains("groupTicker")) ticker_to_id[m["groupTicker"]] = cond_id;
+          if (m.contains("question")) ticker_to_id[m["question"]] = cond_id;
 
           if (m.contains("clobTokenIds")) {
             auto tokens_str = m["clobTokenIds"].get<std::string>();
             auto tokens = nlohmann::json::parse(tokens_str);
             if (tokens.size() >= 2) {
-              ticker_to_id[slug + "_YES"] = tokens[0].get<std::string>();
-              ticker_to_id[slug + "_NO"] = tokens[1].get<std::string>();
+              std::string yes_token = tokens[0].get<std::string>();
+              std::string no_token = tokens[1].get<std::string>();
+              
+              ticker_to_id[slug + "_YES"] = yes_token;
+              ticker_to_id[slug + "_NO"] = no_token;
+              
+              if (m.contains("groupTicker")) {
+                  std::string gt = m["groupTicker"];
+                  ticker_to_id[gt + "_YES"] = yes_token;
+                  ticker_to_id[gt + "_NO"] = no_token;
+              }
             }
           }
         }

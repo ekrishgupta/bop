@@ -48,11 +48,27 @@ struct MarketBackend {
 
   virtual void sync_markets() {}
 
-  std::string resolve_ticker(const std::string &ticker) const {
+  virtual std::string resolve_ticker(const std::string &ticker) const {
+    if (ticker_to_id.empty()) {
+        const_cast<MarketBackend *>(this)->sync_markets();
+    }
+
+    // 1. Exact match
     auto it = ticker_to_id.find(ticker);
     if (it != ticker_to_id.end()) {
       return it->second;
     }
+
+    // 2. Case-insensitive search
+    std::string upper_ticker = ticker;
+    for (auto &c : upper_ticker) c = toupper(c);
+    
+    for (auto const& [key, val] : ticker_to_id) {
+        std::string upper_key = key;
+        for (auto &c : upper_key) c = toupper(c);
+        if (upper_key == upper_ticker) return val;
+    }
+
     return ticker;
   }
 
