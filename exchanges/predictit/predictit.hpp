@@ -84,7 +84,7 @@ struct PredictIt : public StreamingMarketBackend {
 
   // WebSocket implementation (PredictIt doesn't use it, but we must implement the pure virtual)
   void send_subscription(MarketId) const override {}
-  void handle_message(const std::string &) override {}
+  void handle_message(std::string_view) override {}
 
   // --- Trading ---
   // PredictIt trading is more restricted and often requires browser-like auth or specific API keys

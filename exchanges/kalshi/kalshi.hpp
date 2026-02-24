@@ -90,9 +90,9 @@ struct Kalshi : public StreamingMarketBackend {
     ws_->send(j.dump());
   }
 
-  void handle_message(const std::string &msg) override {
+  void handle_message(std::string_view msg) override {
     try {
-      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.size());
       std::string_view type;
       auto error = doc["type"].get(type);
       if (error) return;
@@ -102,7 +102,7 @@ struct Kalshi : public StreamingMarketBackend {
         std::string_view ticker;
         int64_t last_price;
         if (!m["market_ticker"].get(ticker) && !m["last_price"].get(last_price)) {
-            update_price(MarketId(std::string(ticker).c_str()), Price::from_cents(last_price),
+            update_price(MarketId(ticker), Price::from_cents(last_price),
                          Price::from_cents(100 - last_price));
         }
       } else if (type == "fill") {

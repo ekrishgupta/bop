@@ -43,7 +43,7 @@ public:
   virtual void on_open(std::function<void()> cb) = 0;
   virtual void on_close(std::function<void()> cb) = 0;
   virtual void on_error(std::function<void(const std::string &)> cb) = 0;
-  virtual void on_message(std::function<void(const std::string &)> cb) = 0;
+  virtual void on_message(std::function<void(std::string_view)> cb) = 0;
 
   virtual void subscribe(const std::string &channel,
                          const std::vector<std::string> &symbols) = 0;
@@ -129,7 +129,7 @@ public:
   void on_error(std::function<void(const std::string &)> cb) override {
     error_cb_ = cb;
   }
-  void on_message(std::function<void(const std::string &)> cb) override {
+  void on_message(std::function<void(std::string_view)> cb) override {
     message_cb_ = cb;
   }
 
@@ -226,7 +226,8 @@ private:
     }
 
     if (message_cb_) {
-        message_cb_(beast::buffers_to_string(buffer_.data()));
+        auto data = buffer_.data();
+        message_cb_(std::string_view(static_cast<const char*>(data.data()), data.size()));
     }
     buffer_.consume(buffer_.size());
     do_read();
@@ -253,7 +254,7 @@ private:
   std::function<void()> open_cb_;
   std::function<void()> close_cb_;
   std::function<void(const std::string &)> error_cb_;
-  std::function<void(const std::string &)> message_cb_;
+  std::function<void(std::string_view)> message_cb_;
 };
 
 /**
@@ -269,7 +270,7 @@ public:
   void on_open(std::function<void()>) override {}
   void on_close(std::function<void()>) override {}
   void on_error(std::function<void(const std::string &)>) override {}
-  void on_message(std::function<void(const std::string &)>) override {}
+  void on_message(std::function<void(std::string_view)>) override {}
   void subscribe(const std::string &, const std::vector<std::string> &) override {}
 };
 

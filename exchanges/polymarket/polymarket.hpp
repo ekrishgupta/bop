@@ -107,9 +107,9 @@ struct Polymarket : public StreamingMarketBackend {
     ws_->send(j.dump());
   }
 
-  void handle_message(const std::string &msg) override {
+  void handle_message(std::string_view msg) override {
     try {
-      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.size());
       
       auto process_event = [this](auto event) {
         std::string_view type;
@@ -120,7 +120,7 @@ struct Polymarket : public StreamingMarketBackend {
           std::string_view price_str;
           if (!event["token_id"].get(token_id) && !event["price"].get(price_str)) {
             double price = std::stod(std::string(price_str));
-            update_price(MarketId(std::string(token_id).c_str()), Price::from_double(price),
+            update_price(MarketId(token_id), Price::from_double(price),
                          Price::from_double(1.0 - price));
           }
         } else if (type == "order_update") {

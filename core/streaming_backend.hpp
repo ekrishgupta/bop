@@ -23,7 +23,7 @@ public:
       : ws_(std::move(ws)) {
     if (ws_) {
       ws_->on_message(
-          [this](const std::string &msg) { this->handle_message(msg); });
+          [this](std::string_view msg) { this->handle_message(std::string(msg)); });
 
       // Handle automatic re-subscription on connection/reconnection
       ws_->on_open([this]() {
@@ -82,7 +82,7 @@ public:
   virtual void send_subscription(MarketId market) const = 0;
 
 protected:
-  virtual void handle_message(const std::string &msg) = 0;
+  virtual void handle_message(std::string_view msg) = 0;
 
   void update_price(MarketId market, Price yes, Price no);
   void update_orderbook(MarketId market, const OrderBook &ob);
