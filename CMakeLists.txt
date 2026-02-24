@@ -17,6 +17,14 @@ find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 
+include(FetchContent)
+FetchContent_Declare(
+  simdjson
+  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+  GIT_TAG v3.6.4
+)
+FetchContent_MakeAvailable(simdjson)
+
 # Static Analysis
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
 if(CLANG_TIDY_EXE)
@@ -31,7 +39,7 @@ add_library(bop_core
     core/impl.cpp
     core/algo.cpp
 )
-target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::system)
+target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::system simdjson::simdjson)
 
 # Main Executable
 add_executable(main main.cpp)
@@ -43,3 +51,6 @@ target_link_libraries(test_auth PRIVATE bop_core)
 
 add_executable(test_keccak test_keccak.cpp)
 target_link_libraries(test_keccak PRIVATE bop_core)
+
+add_executable(backtest_example examples/backtest_example.cpp)
+target_link_libraries(backtest_example PRIVATE bop_core)
