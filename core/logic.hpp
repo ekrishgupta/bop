@@ -352,6 +352,11 @@ inline MarketQuery<PositionTag> Position(MarketTarget target) {
 inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
 
 inline MarketQuery<OpenOrdersTag> OpenOrders(MarketId mkt) { return {mkt, true}; }
+inline MarketQuery<OpenOrdersTag> OpenOrders(const MarketTarget &mt) { return {mt.market, true}; }
+
+inline Condition<OpenOrdersTag> operator<(MarketQuery<OpenOrdersTag> q, int threshold) {
+  return {q, static_cast<long long>(threshold), false};
+}
 
 inline BalanceQuery Balance() { return {}; }
 
