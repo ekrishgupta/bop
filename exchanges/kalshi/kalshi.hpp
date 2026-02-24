@@ -1,10 +1,12 @@
 #pragma once
 
-#include "../../core/market_base.hpp"
+#include "../../core/streaming_backend.hpp"
 
 namespace bop::exchanges {
 
-struct Kalshi : public MarketBackend {
+struct Kalshi : public StreamingMarketBackend {
+  Kalshi() : StreamingMarketBackend(std::make_unique<MockWebSocketClient>()) {}
+
   std::string name() const override { return "Kalshi"; }
 
   // Historical Cutoffs (RFC3339 formatted as per docs)
@@ -19,7 +21,7 @@ struct Kalshi : public MarketBackend {
   std::string get_exchange_schedule() const override { return "24/7"; }
 
   // --- Market Data ---
-  Price get_price(MarketId market, bool outcome_yes) const override {
+  Price get_price_http(MarketId market, bool outcome_yes) const override {
     std::string url =
         std::string("https://api.elections.kalshi.com/trade-api/v2/markets/") +
         market.ticker;
@@ -27,35 +29,50 @@ struct Kalshi : public MarketBackend {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
         auto j = resp.json_body();
-        // Kalshi V2 returns { "market": { "last_price": 50, ... } }
         int64_t cents = j["market"]["last_price"].get<int64_t>();
         if (!outcome_yes)
           cents = 100 - cents;
         return Price::from_cents(cents);
       }
     } catch (...) {
-      // Fallback or error handling
     }
-    return Price::from_cents(50); // Mock fallback
+    return Price::from_cents(50);
+  }
+
+  OrderBook get_orderbook_http(MarketId market) const override {
+    return {{{Price::from_cents(50), 100}}, {{Price::from_cents(51), 100}}};
   }
 
   Price get_depth(MarketId, bool) const override {
-    return Price::from_cents(2); // Mock: spread in cents
-  }
-
-  OrderBook get_orderbook(MarketId) const override {
-    return {{{Price::from_cents(50), 100}},
-            {{Price::from_cents(51), 100}}}; // Mock L2
+    return Price::from_cents(2);
   }
 
   std::vector<Candlestick> get_candlesticks(MarketId) const override {
     return {{0, Price::from_cents(50), Price::from_cents(55),
-             Price::from_cents(45), Price::from_cents(52), 1000}}; // Mock OHLCV
+             Price::from_cents(45), Price::from_cents(52), 1000}};
   }
 
-  // --- Historical ---
-  std::string get_historical_cutoff() const override {
-    return "2023-11-07T05:31:56Z";
+  // WebSocket implementation
+  void send_subscription(MarketId market) const override {
+    json j;
+    j["id"] = 1;
+    j["cmd"] = "subscribe";
+    j["params"]["channels"] = {"ticker"};
+    j["params"]["market_tickers"] = {market.ticker};
+    ws_->send(j.dump());
+  }
+
+  void handle_message(const std::string &msg) override {
+    try {
+      auto j = json::parse(msg);
+      if (j.contains("type") && j["type"] == "ticker") {
+        std::string ticker = j["msg"]["market_ticker"];
+        int64_t last_price = j["msg"]["last_price"];
+        update_price(MarketId(ticker.c_str()), Price::from_cents(last_price),
+                     Price::from_cents(100 - last_price));
+      }
+    } catch (...) {
+    }
   }
 
   // --- Trading ---
@@ -91,6 +108,7 @@ struct Kalshi : public MarketBackend {
     }
     return "error";
   }
+
   bool cancel_order(const std::string &) const override { return true; }
 
   // --- Portfolio ---
@@ -101,7 +119,6 @@ struct Kalshi : public MarketBackend {
       auto resp = Network.get(url, auth_headers("GET", path));
       if (resp.status_code == 200) {
         auto j = resp.json_body();
-        // Kalshi returns balance in cents
         return Price::from_cents(j["balance"].get<int64_t>());
       }
     } catch (...) {
@@ -116,24 +133,6 @@ struct Kalshi : public MarketBackend {
   // Cent-pricing validator
   static bool is_valid_price(int64_t cents) {
     return cents >= 1 && cents <= 99;
-  }
-
-  // --- WebSocket Streaming ---
-  void ws_subscribe_orderbook(
-      MarketId market,
-      std::function<void(const OrderBook &)> callback) const override {
-    std::cout << "[KALSHI] WS Subscribe Orderbook: " << market.hash
-              << std::endl;
-  }
-
-  void ws_subscribe_trades(
-      MarketId market,
-      std::function<void(Price, int64_t)> callback) const override {
-    std::cout << "[KALSHI] WS Subscribe Trades: " << market.hash << std::endl;
-  }
-
-  void ws_unsubscribe(MarketId market) const override {
-    std::cout << "[KALSHI] WS Unsubscribe: " << market.hash << std::endl;
   }
 
   // Authentication Helpers
@@ -162,7 +161,8 @@ struct Kalshi : public MarketBackend {
 
 static Kalshi kalshi;
 
-// Helper for Kalshi-specific tickers
-MarketTarget KalshiTicker(const char *ticker) { return Market(ticker, kalshi); }
+inline MarketTarget KalshiTicker(const char *ticker) {
+  return Market(ticker, kalshi);
+}
 
 } // namespace bop::exchanges
