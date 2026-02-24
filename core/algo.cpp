@@ -207,4 +207,58 @@ bool VWAPAlgo::tick(ExecutionEngine &engine) {
     return false;
 }
 
+// ArbitrageAlgo Implementation
+ArbitrageAlgo::ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
+                             const MarketBackend *b2, Price min_profit, int qty)
+    : m1(m1), m2(m2), b1(b1), b2(b2), min_profit(min_profit), quantity(qty) {}
+
+bool ArbitrageAlgo::tick(ExecutionEngine &engine) {
+    if (!active) return true;
+
+    // We check prices on both backends
+    Price p1_yes = b1->get_price(m1, true);
+    Price p2_yes = b2->get_price(m2, true);
+
+    if (p1_yes.raw == 0 || p2_yes.raw == 0) return false;
+
+    // Case 1: Buy on b1, sell on b2
+    // Profit = Price(b2) - Price(b1)
+    if (p2_yes > (p1_yes + min_profit)) {
+        std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b1->name() << " @ " << p1_yes 
+                  << ", Sell " << b2->name() << " @ " << p2_yes << std::endl;
+        
+        Order buy_o(m1, quantity, true, true, p1_yes, 0);
+        buy_o.backend = b1;
+        
+        Order sell_o(m2, quantity, false, true, p2_yes, 0);
+        sell_o.backend = b2;
+
+        buy_o >> engine;
+        sell_o >> engine;
+        
+        active = false; // Execute once for this instance
+        return true;
+    }
+
+    // Case 2: Buy on b2, sell on b1
+    if (p1_yes > (p2_yes + min_profit)) {
+        std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b2->name() << " @ " << p2_yes 
+                  << ", Sell " << b1->name() << " @ " << p1_yes << std::endl;
+        
+        Order buy_o(m2, quantity, true, true, p2_yes, 0);
+        buy_o.backend = b2;
+        
+        Order sell_o(m1, quantity, false, true, p1_yes, 0);
+        sell_o.backend = b1;
+
+        buy_o >> engine;
+        sell_o >> engine;
+        
+        active = false;
+        return true;
+    }
+
+    return false;
+}
+
 } // namespace bop

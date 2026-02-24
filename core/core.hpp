@@ -29,6 +29,7 @@ struct MarketId {
   std::string ticker; // Added for real API calls
   bool resolved = false;
 
+  MarketId() : hash(0), ticker(""), resolved(false) {}
   explicit MarketId(uint32_t h) : hash(h), ticker(""), resolved(false) {}
   MarketId(const char *t) : hash(fnv1a(t)), ticker(t), resolved(false) {}
   MarketId(uint32_t h, std::string t) : hash(h), ticker(std::move(t)), resolved(false) {}
@@ -59,11 +60,17 @@ constexpr ReferencePrice Bid = ReferencePrice::Bid;
 constexpr ReferencePrice Ask = ReferencePrice::Ask;
 constexpr ReferencePrice Mid = ReferencePrice::Mid;
 
-enum class AlgoType : uint8_t { None, Peg, TWAP, VWAP, Trailing };
+enum class AlgoType : uint8_t { None, Peg, TWAP, VWAP, Trailing, Arbitrage };
 
 struct PegData {
   ReferencePrice ref;
   Price offset;
+};
+
+struct ArbData {
+    MarketId m2;
+    const MarketBackend* b2;
+    Price min_profit;
 };
 
 struct Order {
@@ -84,7 +91,7 @@ struct Order {
   const MarketBackend *backend = nullptr;
 
   AlgoType algo_type = AlgoType::None;
-  std::variant<std::monostate, PegData, int64_t, double, Price> algo_params;
+  std::variant<std::monostate, PegData, int64_t, double, Price, ArbData> algo_params;
 
   MarketId market2 = MarketId(0u);
   bool is_spread = false;

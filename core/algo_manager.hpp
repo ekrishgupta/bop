@@ -31,6 +31,10 @@ public:
       pending_algos.push_back(std::make_unique<PegAlgo>(o));
     } else if (o.algo_type == AlgoType::VWAP) {
       pending_algos.push_back(std::make_unique<VWAPAlgo>(o));
+    } else if (o.algo_type == AlgoType::Arbitrage) {
+        auto data = std::get<ArbData>(o.algo_params);
+        pending_algos.push_back(std::make_unique<ArbitrageAlgo>(
+            o.market, o.backend, data.m2, data.b2, data.min_profit, o.quantity));
     }
   }
 
@@ -40,6 +44,7 @@ public:
   }
 
   void tick(ExecutionEngine &engine) {
+    std::cout << "[ALGO] Ticking manager..." << std::endl;
     std::lock_guard<std::mutex> lock(mtx);
     
     // 1. Move pending to active

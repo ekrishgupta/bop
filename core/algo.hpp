@@ -67,4 +67,19 @@ public:
   bool tick(ExecutionEngine &engine) override;
 };
 
+class ArbitrageAlgo : public ExecutionAlgo {
+  MarketId m1;
+  MarketId m2;
+  const MarketBackend *b1;
+  const MarketBackend *b2;
+  Price min_profit;
+  int quantity;
+  bool active = true;
+
+public:
+  ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
+                const MarketBackend *b2, Price min_profit, int qty);
+  bool tick(ExecutionEngine &engine) override;
+};
+
 } // namespace bop
