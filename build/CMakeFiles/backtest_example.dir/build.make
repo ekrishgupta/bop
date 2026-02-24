@@ -100,7 +100,6 @@ backtest_example: /opt/homebrew/Cellar/openssl@3/3.6.1/lib/libssl.dylib
 backtest_example: /opt/homebrew/Cellar/openssl@3/3.6.1/lib/libcrypto.dylib
 backtest_example: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
 backtest_example: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
-backtest_example: _deps/simdjson-build/libsimdjson.a
 backtest_example: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libsqlite3.tbd
 backtest_example: CMakeFiles/backtest_example.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable backtest_example"

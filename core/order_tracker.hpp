@@ -8,8 +8,6 @@
 
 namespace bop {
 
-enum class OrderStatus { Pending, Open, PartiallyFilled, Filled, Cancelled, Rejected };
-
 struct OrderRecord {
   std::string id;
   Order order;

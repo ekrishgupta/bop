@@ -21,11 +21,14 @@ find_package(SQLite3 REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
-  simdjson
+  simdjson_content
   GIT_REPOSITORY https://github.com/simdjson/simdjson.git
   GIT_TAG v3.10.1
 )
-FetchContent_MakeAvailable(simdjson)
+FetchContent_MakeAvailable(simdjson_content)
+
+# Use an alias to get the expected target name
+add_library(simdjson::simdjson ALIAS simdjson)
 
 # Static Analysis
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
@@ -49,11 +52,8 @@ add_executable(main main.cpp)
 target_link_libraries(main PRIVATE bop_core)
 
 # Tests
-# add_executable(test_auth test_auth.cpp)
-# target_link_libraries(test_auth PRIVATE bop_core)
-
-# add_executable(test_keccak test_keccak.cpp)
-# target_link_libraries(test_keccak PRIVATE bop_core)
+add_executable(test_dsl tests/test_dsl.cpp)
+target_link_libraries(test_dsl PRIVATE bop_core simdjson)
 
 add_executable(backtest_example examples/backtest_example.cpp)
 target_link_libraries(backtest_example PRIVATE bop_core)

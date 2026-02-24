@@ -1937,119 +1937,18 @@ CMakeFiles/bop_core.dir/core/algo.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/this_thread.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/common_defs.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/compiler_check.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/portability.h \
+  /opt/homebrew/include/simdjson.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cfloat \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/float.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/float.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/strings.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/avx512vbmi2intrin.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/simdjson_version.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/error.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/error-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/implementation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/atomic_ptr.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/dom_parser_implementation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/minify.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/padded_string.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/padded_string-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/padded_string_view.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/padded_string_view-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/array.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/tape_ref.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/document_stream.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/parser.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/document.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/condition_variable \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_callback.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/element.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/object.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/serialization.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/array-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/tape_ref-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/tape_type.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/element-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/object-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/document_stream-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/parser-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/document-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/jsonformatutils.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/dom/serialization-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/ondemand.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/builtin/ondemand.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/builtin.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/builtin/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/implementation_detection.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/builtin/implementation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/dependencies.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/instruction_set.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/jsoncharutils_tables.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/numberparsing_tables.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/internal/simdprune_tables.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/implementation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/begin.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/intrinsics.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_neon.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_bf16.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_vector_types.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/bitmanipulation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/bitmask.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/numberparsing_defs.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/simd.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/stringparsing_defs.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/amalgamated.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/jsoncharutils.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/atomparsing.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/dom_parser_implementation.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/implementation_simdjson_result_base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/numberparsing.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/implementation_simdjson_result_base-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/end.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/dependencies.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/arm64/ondemand.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/amalgamated.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/base.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/value_iterator.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/value.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/logger.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/token_iterator.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/json_iterator.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/json_type.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/raw_json_string.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/parser.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/array.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/array_iterator.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/document.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/document_stream.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/field.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/object.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/object_iterator.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/serialization.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/array-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/array_iterator-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/document-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/document_stream-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/field-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/json_iterator-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/json_type-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/logger-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/object-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/object_iterator-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/parser-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/raw_json_string-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/serialization-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/token_iterator-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/value-inl.h \
-  /Users/krishgupta/Projects/bop/build/_deps/simdjson-src/include/simdjson/generic/ondemand/value_iterator-inl.h \
   /Users/krishgupta/Projects/bop/core/database.hpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sqlite3.h \
+  /Users/krishgupta/Projects/bop/core/greek_engine.hpp \
+  /Users/krishgupta/Projects/bop/core/pricing.hpp \
   /Users/krishgupta/Projects/bop/core/algo_manager.hpp

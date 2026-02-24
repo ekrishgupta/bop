@@ -85,51 +85,6 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 .PHONY : rebuild_cache/fast
 
-# Special rule for the target list_install_components
-list_install_components:
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Available install components are: \"Unspecified\" \"simdjson_Development\""
-.PHONY : list_install_components
-
-# Special rule for the target list_install_components
-list_install_components/fast: list_install_components
-.PHONY : list_install_components/fast
-
-# Special rule for the target install
-install: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/opt/homebrew/bin/cmake -P cmake_install.cmake
-.PHONY : install
-
-# Special rule for the target install
-install/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/opt/homebrew/bin/cmake -P cmake_install.cmake
-.PHONY : install/fast
-
-# Special rule for the target install/local
-install/local: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
-.PHONY : install/local
-
-# Special rule for the target install/local
-install/local/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
-.PHONY : install/local/fast
-
-# Special rule for the target install/strip
-install/strip: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip
-
-# Special rule for the target install/strip
-install/strip/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip/fast
-
 # The main all target
 all: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles /Users/krishgupta/Projects/bop/build//CMakeFiles/progress.marks
@@ -201,17 +156,30 @@ backtest_example/fast:
 .PHONY : backtest_example/fast
 
 #=============================================================================
-# Target rules for targets named simdjson
+# Target rules for targets named universal_market_example
 
 # Build rule for target.
-simdjson: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 simdjson
-.PHONY : simdjson
+universal_market_example: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 universal_market_example
+.PHONY : universal_market_example
 
 # fast build rule for target.
-simdjson/fast:
-	$(MAKE) $(MAKESILENT) -f _deps/simdjson-build/CMakeFiles/simdjson.dir/build.make _deps/simdjson-build/CMakeFiles/simdjson.dir/build
-.PHONY : simdjson/fast
+universal_market_example/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/build
+.PHONY : universal_market_example/fast
+
+#=============================================================================
+# Target rules for targets named test_dsl
+
+# Build rule for target.
+test_dsl: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_dsl
+.PHONY : test_dsl
+
+# fast build rule for target.
+test_dsl/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/build
+.PHONY : test_dsl/fast
 
 core/algo.o: core/algo.cpp.o
 .PHONY : core/algo.o
@@ -309,6 +277,30 @@ examples/backtest_example.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/backtest_example.dir/build.make CMakeFiles/backtest_example.dir/examples/backtest_example.cpp.s
 .PHONY : examples/backtest_example.cpp.s
 
+examples/universal_market_example.o: examples/universal_market_example.cpp.o
+.PHONY : examples/universal_market_example.o
+
+# target to build an object file
+examples/universal_market_example.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/examples/universal_market_example.cpp.o
+.PHONY : examples/universal_market_example.cpp.o
+
+examples/universal_market_example.i: examples/universal_market_example.cpp.i
+.PHONY : examples/universal_market_example.i
+
+# target to preprocess a source file
+examples/universal_market_example.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/examples/universal_market_example.cpp.i
+.PHONY : examples/universal_market_example.cpp.i
+
+examples/universal_market_example.s: examples/universal_market_example.cpp.s
+.PHONY : examples/universal_market_example.s
+
+# target to generate assembly for a file
+examples/universal_market_example.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/examples/universal_market_example.cpp.s
+.PHONY : examples/universal_market_example.cpp.s
+
 main.o: main.cpp.o
 .PHONY : main.o
 
@@ -333,6 +325,30 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+tests/test_dsl.o: tests/test_dsl.cpp.o
+.PHONY : tests/test_dsl.o
+
+# target to build an object file
+tests/test_dsl.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/tests/test_dsl.cpp.o
+.PHONY : tests/test_dsl.cpp.o
+
+tests/test_dsl.i: tests/test_dsl.cpp.i
+.PHONY : tests/test_dsl.i
+
+# target to preprocess a source file
+tests/test_dsl.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/tests/test_dsl.cpp.i
+.PHONY : tests/test_dsl.cpp.i
+
+tests/test_dsl.s: tests/test_dsl.cpp.s
+.PHONY : tests/test_dsl.s
+
+# target to generate assembly for a file
+tests/test_dsl.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/tests/test_dsl.cpp.s
+.PHONY : tests/test_dsl.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -340,15 +356,12 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... edit_cache"
-	@echo "... install"
-	@echo "... install/local"
-	@echo "... install/strip"
-	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... backtest_example"
 	@echo "... bop_core"
 	@echo "... main"
-	@echo "... simdjson"
+	@echo "... test_dsl"
+	@echo "... universal_market_example"
 	@echo "... core/algo.o"
 	@echo "... core/algo.i"
 	@echo "... core/algo.s"
@@ -361,9 +374,15 @@ help:
 	@echo "... examples/backtest_example.o"
 	@echo "... examples/backtest_example.i"
 	@echo "... examples/backtest_example.s"
+	@echo "... examples/universal_market_example.o"
+	@echo "... examples/universal_market_example.i"
+	@echo "... examples/universal_market_example.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... tests/test_dsl.o"
+	@echo "... tests/test_dsl.i"
+	@echo "... tests/test_dsl.s"
 .PHONY : help
 
 

@@ -222,19 +222,9 @@ inline MarketBoundQuote operator|(MarketBoundQuote q, Offset o) {
     return q;
 }
 
-inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine) {
-    Order o;
-    o.market = q.market;
-    o.quantity = q.quantity;
-    o.backend = q.backend;
-    o.algo_type = AlgoType::MarketMaker;
-    o.algo_params = MarketMakerData{q.spread, q.ref};
-    o.creation_timestamp_ns = q.timestamp_ns;
-    
-    // Dispatch to engine
-    o >> engine;
-    return o;
-}
+class ExecutionEngine;
+
+inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine);
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   Q query;

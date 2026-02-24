@@ -100,7 +100,6 @@ main: /opt/homebrew/Cellar/openssl@3/3.6.1/lib/libssl.dylib
 main: /opt/homebrew/Cellar/openssl@3/3.6.1/lib/libcrypto.dylib
 main: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
 main: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
-main: _deps/simdjson-build/libsimdjson.a
 main: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/libsqlite3.tbd
 main: CMakeFiles/main.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable main"

@@ -304,7 +304,7 @@ FETCHCONTENT_BASE_DIR:PATH=/Users/krishgupta/Projects/bop/build/_deps
 
 //Disables all attempts to download or update content and assumes
 // source dirs already exist
-FETCHCONTENT_FULLY_DISCONNECTED:BOOL=OFF
+FETCHCONTENT_FULLY_DISCONNECTED:BOOL=ON
 
 //Enables QUIET option for all content population
 FETCHCONTENT_QUIET:BOOL=ON
@@ -312,6 +312,10 @@ FETCHCONTENT_QUIET:BOOL=ON
 //When not empty, overrides where to find pre-populated content
 // for simdjson
 FETCHCONTENT_SOURCE_DIR_SIMDJSON:PATH=
+
+//When not empty, overrides where to find pre-populated content
+// for simdjson_content
+FETCHCONTENT_SOURCE_DIR_SIMDJSON_CONTENT:PATH=
 
 //Enables UPDATE_DISCONNECTED behavior for all content population
 FETCHCONTENT_UPDATES_DISCONNECTED:BOOL=OFF
@@ -617,7 +621,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=2
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

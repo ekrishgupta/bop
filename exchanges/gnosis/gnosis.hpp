@@ -38,7 +38,7 @@ struct Gnosis : public StreamingMarketBackend {
   }
 
   void send_subscription(MarketId) const override {}
-  void handle_message(const std::string &) override {}
+  void handle_message(std::string_view) override {}
 
   // --- Trading ---
   std::string create_order(const Order &o) const override {

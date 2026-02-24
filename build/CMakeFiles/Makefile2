@@ -66,51 +66,35 @@ CMAKE_BINARY_DIR = /Users/krishgupta/Projects/bop/build
 all: CMakeFiles/bop_core.dir/all
 all: CMakeFiles/main.dir/all
 all: CMakeFiles/backtest_example.dir/all
-all: _deps/simdjson-build/all
+all: CMakeFiles/universal_market_example.dir/all
+all: CMakeFiles/test_dsl.dir/all
 .PHONY : all
 
 # The main recursive "codegen" target.
 codegen: CMakeFiles/bop_core.dir/codegen
 codegen: CMakeFiles/main.dir/codegen
 codegen: CMakeFiles/backtest_example.dir/codegen
-codegen: _deps/simdjson-build/codegen
+codegen: CMakeFiles/universal_market_example.dir/codegen
+codegen: CMakeFiles/test_dsl.dir/codegen
 .PHONY : codegen
 
 # The main recursive "preinstall" target.
-preinstall: _deps/simdjson-build/preinstall
+preinstall:
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: CMakeFiles/bop_core.dir/clean
 clean: CMakeFiles/main.dir/clean
 clean: CMakeFiles/backtest_example.dir/clean
-clean: _deps/simdjson-build/clean
+clean: CMakeFiles/universal_market_example.dir/clean
+clean: CMakeFiles/test_dsl.dir/clean
 .PHONY : clean
-
-#=============================================================================
-# Directory level rules for directory _deps/simdjson-build
-
-# Recursive "all" directory target.
-_deps/simdjson-build/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
-.PHONY : _deps/simdjson-build/all
-
-# Recursive "codegen" directory target.
-_deps/simdjson-build/codegen: _deps/simdjson-build/CMakeFiles/simdjson.dir/codegen
-.PHONY : _deps/simdjson-build/codegen
-
-# Recursive "preinstall" directory target.
-_deps/simdjson-build/preinstall:
-.PHONY : _deps/simdjson-build/preinstall
-
-# Recursive "clean" directory target.
-_deps/simdjson-build/clean: _deps/simdjson-build/CMakeFiles/simdjson.dir/clean
-.PHONY : _deps/simdjson-build/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/bop_core.dir
 
 # All Build rule for target.
-CMakeFiles/bop_core.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
+CMakeFiles/bop_core.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bop_core.dir/build.make CMakeFiles/bop_core.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bop_core.dir/build.make CMakeFiles/bop_core.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=3,4,5,6 "Built target bop_core"
@@ -118,7 +102,7 @@ CMakeFiles/bop_core.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/bop_core.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 6
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 4
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/bop_core.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 0
 .PHONY : CMakeFiles/bop_core.dir/rule
@@ -143,7 +127,6 @@ CMakeFiles/bop_core.dir/clean:
 
 # All Build rule for target.
 CMakeFiles/main.dir/all: CMakeFiles/bop_core.dir/all
-CMakeFiles/main.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=7,8 "Built target main"
@@ -151,7 +134,7 @@ CMakeFiles/main.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/main.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 8
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/main.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 0
 .PHONY : CMakeFiles/main.dir/rule
@@ -176,7 +159,6 @@ CMakeFiles/main.dir/clean:
 
 # All Build rule for target.
 CMakeFiles/backtest_example.dir/all: CMakeFiles/bop_core.dir/all
-CMakeFiles/backtest_example.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/backtest_example.dir/build.make CMakeFiles/backtest_example.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/backtest_example.dir/build.make CMakeFiles/backtest_example.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=1,2 "Built target backtest_example"
@@ -184,7 +166,7 @@ CMakeFiles/backtest_example.dir/all: _deps/simdjson-build/CMakeFiles/simdjson.di
 
 # Build rule for subdir invocation for target.
 CMakeFiles/backtest_example.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 8
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/backtest_example.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 0
 .PHONY : CMakeFiles/backtest_example.dir/rule
@@ -205,36 +187,68 @@ CMakeFiles/backtest_example.dir/clean:
 .PHONY : CMakeFiles/backtest_example.dir/clean
 
 #=============================================================================
-# Target rules for target _deps/simdjson-build/CMakeFiles/simdjson.dir
+# Target rules for target CMakeFiles/universal_market_example.dir
 
 # All Build rule for target.
-_deps/simdjson-build/CMakeFiles/simdjson.dir/all:
-	$(MAKE) $(MAKESILENT) -f _deps/simdjson-build/CMakeFiles/simdjson.dir/build.make _deps/simdjson-build/CMakeFiles/simdjson.dir/depend
-	$(MAKE) $(MAKESILENT) -f _deps/simdjson-build/CMakeFiles/simdjson.dir/build.make _deps/simdjson-build/CMakeFiles/simdjson.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=9,10 "Built target simdjson"
-.PHONY : _deps/simdjson-build/CMakeFiles/simdjson.dir/all
+CMakeFiles/universal_market_example.dir/all: CMakeFiles/bop_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=11,12 "Built target universal_market_example"
+.PHONY : CMakeFiles/universal_market_example.dir/all
 
 # Build rule for subdir invocation for target.
-_deps/simdjson-build/CMakeFiles/simdjson.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 2
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/simdjson-build/CMakeFiles/simdjson.dir/all
+CMakeFiles/universal_market_example.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 6
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/universal_market_example.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 0
-.PHONY : _deps/simdjson-build/CMakeFiles/simdjson.dir/rule
+.PHONY : CMakeFiles/universal_market_example.dir/rule
 
 # Convenience name for target.
-simdjson: _deps/simdjson-build/CMakeFiles/simdjson.dir/rule
-.PHONY : simdjson
+universal_market_example: CMakeFiles/universal_market_example.dir/rule
+.PHONY : universal_market_example
 
 # codegen rule for target.
-_deps/simdjson-build/CMakeFiles/simdjson.dir/codegen:
-	$(MAKE) $(MAKESILENT) -f _deps/simdjson-build/CMakeFiles/simdjson.dir/build.make _deps/simdjson-build/CMakeFiles/simdjson.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=9,10 "Finished codegen for target simdjson"
-.PHONY : _deps/simdjson-build/CMakeFiles/simdjson.dir/codegen
+CMakeFiles/universal_market_example.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=11,12 "Finished codegen for target universal_market_example"
+.PHONY : CMakeFiles/universal_market_example.dir/codegen
 
 # clean rule for target.
-_deps/simdjson-build/CMakeFiles/simdjson.dir/clean:
-	$(MAKE) $(MAKESILENT) -f _deps/simdjson-build/CMakeFiles/simdjson.dir/build.make _deps/simdjson-build/CMakeFiles/simdjson.dir/clean
-.PHONY : _deps/simdjson-build/CMakeFiles/simdjson.dir/clean
+CMakeFiles/universal_market_example.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/universal_market_example.dir/build.make CMakeFiles/universal_market_example.dir/clean
+.PHONY : CMakeFiles/universal_market_example.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/test_dsl.dir
+
+# All Build rule for target.
+CMakeFiles/test_dsl.dir/all: CMakeFiles/bop_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=9,10 "Built target test_dsl"
+.PHONY : CMakeFiles/test_dsl.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/test_dsl.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 6
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_dsl.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/krishgupta/Projects/bop/build/CMakeFiles 0
+.PHONY : CMakeFiles/test_dsl.dir/rule
+
+# Convenience name for target.
+test_dsl: CMakeFiles/test_dsl.dir/rule
+.PHONY : test_dsl
+
+# codegen rule for target.
+CMakeFiles/test_dsl.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/krishgupta/Projects/bop/build/CMakeFiles --progress-num=9,10 "Finished codegen for target test_dsl"
+.PHONY : CMakeFiles/test_dsl.dir/codegen
+
+# clean rule for target.
+CMakeFiles/test_dsl.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_dsl.dir/build.make CMakeFiles/test_dsl.dir/clean
+.PHONY : CMakeFiles/test_dsl.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

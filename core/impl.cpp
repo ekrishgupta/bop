@@ -200,4 +200,17 @@ void operator>>(const OCOOrder &oco, ExecutionEngine &engine) {
     oco.order2 >> engine;
 }
 
+Order operator>>(MarketBoundQuote q, ExecutionEngine &engine) {
+    Order o;
+    o.market = q.market;
+    o.quantity = q.quantity;
+    o.backend = q.backend;
+    o.algo_type = AlgoType::MarketMaker;
+    o.algo_params = MarketMakerData{q.spread, q.ref};
+    o.creation_timestamp_ns = q.timestamp_ns;
+    
+    o >> engine;
+    return o;
+}
+
 } // namespace bop
