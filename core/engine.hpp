@@ -14,13 +14,81 @@ namespace bop {
 
 struct ExecutionEngine {
   std::atomic<bool> is_running{false};
+  mutable std::vector<const MarketBackend *> backends_;
 
   virtual ~ExecutionEngine() = default;
 
-  virtual int64_t get_position(MarketId market) const { return 0; }
-  virtual Price get_balance() const { return Price(0); }
+  void register_backend(const MarketBackend *backend) {
+    backends_.push_back(backend);
+  }
+
+  virtual int64_t get_position(MarketId market) const {
+    int64_t total = 0;
+    for (auto b : backends_) {
+      // Find the position for this market on this backend
+      // We need a more efficient way if we have many markets/backends
+      // But for now, we'll try to get positions and parse
+      std::string pos_json = b->get_positions();
+      try {
+        auto j = nlohmann::json::parse(pos_json);
+        if (j.contains("positions")) {
+          for (const auto &p : j["positions"]) {
+            if (p.contains("market_ticker") &&
+                p["market_ticker"] == market.ticker) {
+              total += p["quantity"].get<int64_t>();
+            } else if (p.contains("token_id") &&
+                       p["token_id"] == market.ticker) {
+              total += p["quantity"].get<int64_t>();
+            }
+          }
+        }
+      } catch (...) {
+      }
+    }
+    return total;
+  }
+
+  virtual Price get_balance() const {
+    Price total(0);
+    for (auto b : backends_) {
+      total = total + b->get_balance();
+    }
+    return total;
+  }
+
   virtual Price get_exposure() const { return Price(0); }
-  virtual Price get_pnl() const { return Price(0); }
+
+  virtual Price get_pnl() const {
+    Price total_pnl(0);
+    for (auto b : backends_) {
+      std::string pos_json = b->get_positions();
+      try {
+        auto j = nlohmann::json::parse(pos_json);
+        if (j.contains("positions")) {
+          for (const auto &p : j["positions"]) {
+            std::string ticker;
+            if (p.contains("market_ticker"))
+              ticker = p["market_ticker"];
+            else if (p.contains("token_id"))
+              ticker = p["token_id"];
+
+            if (!ticker.empty()) {
+              int64_t qty = p["quantity"].get<int64_t>();
+              Price entry_price = Price::from_double(
+                  std::stod(p["avg_entry_price"].get<std::string>()));
+              Price current_price = b->get_price(MarketId(ticker.c_str()), true);
+
+              // Simple PnL: (current - entry) * qty
+              total_pnl = total_pnl + (current_price - entry_price) * qty;
+            }
+          }
+        }
+      } catch (...) {
+      }
+    }
+    return total_pnl;
+  }
+
   virtual Price get_depth(MarketId market, bool is_bid) const {
     return Price(0);
   }
@@ -30,7 +98,7 @@ struct ExecutionEngine {
   virtual int64_t get_volume(MarketId market) const { return 0; }
 
   virtual void stop() { is_running = false; }
-  virtual void run(); 
+  virtual void run();
 };
 
 } // namespace bop
