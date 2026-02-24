@@ -9,6 +9,8 @@
 
 namespace bop {
 
+struct ExecutionEngine;
+
 /**
  * @brief A backend that uses WebSockets to maintain a live view of the market.
  * This reduces latency by avoiding HTTP polling and providing immediate access
@@ -31,6 +33,8 @@ public:
       });
     }
   }
+
+  void set_engine(ExecutionEngine* engine) { engine_ = engine; }
 
   // Market Data (Live) - Now returns cached data with fallback
   Price get_price(MarketId market, bool outcome_yes) const override {
@@ -98,8 +102,12 @@ protected:
       cb(ob);
   }
 
+  void notify_fill(const std::string &id, int qty, Price price);
+  void notify_status(const std::string &id, OrderStatus status);
+
   mutable std::mutex cache_mutex_;
   std::unique_ptr<WebSocketClient> ws_;
+  ExecutionEngine* engine_ = nullptr;
 
   struct PricePair {
     Price yes_price;

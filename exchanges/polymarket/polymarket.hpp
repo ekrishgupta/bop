@@ -98,13 +98,32 @@ struct Polymarket : public StreamingMarketBackend {
   void handle_message(const std::string &msg) override {
     try {
       auto j = json::parse(msg);
-      if (j.contains("event_type") && j["event_type"] == "price_change") {
-        std::string token_id = j["token_id"];
-        double price = std::stod(j["price"].get<std::string>());
-        // We need to map token_id back to MarketId and side.
-        // For now, update by token_id as ticker.
-        update_price(MarketId(token_id.c_str()), Price::from_double(price),
-                     Price::from_double(1.0 - price));
+      if (j.is_array()) {
+          for (const auto &item : j) handle_message(item.dump());
+          return;
+      }
+
+      if (j.contains("event_type")) {
+          std::string type = j["event_type"];
+          if (type == "price_change") {
+            std::string token_id = j["token_id"];
+            double price = std::stod(j["price"].get<std::string>());
+            update_price(MarketId(token_id.c_str()), Price::from_double(price),
+                         Price::from_double(1.0 - price));
+          } else if (type == "order_update") {
+            auto order = j["order"];
+            std::string id = order["id"];
+            std::string status_str = j["status"];
+            
+            if (j.contains("fill_size") && std::stod(j["fill_size"].get<std::string>()) > 0) {
+                int qty = static_cast<int>(std::stod(j["fill_size"].get<std::string>()));
+                Price price = Price::from_double(std::stod(j["fill_price"].get<std::string>()));
+                notify_fill(id, qty, price);
+            }
+
+            if (status_str == "closed") notify_status(id, OrderStatus::Filled);
+            else if (status_str == "canceled") notify_status(id, OrderStatus::Cancelled);
+          }
       }
     } catch (...) {
     }

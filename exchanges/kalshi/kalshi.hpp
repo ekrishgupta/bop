@@ -92,11 +92,27 @@ struct Kalshi : public StreamingMarketBackend {
   void handle_message(const std::string &msg) override {
     try {
       auto j = json::parse(msg);
-      if (j.contains("type") && j["type"] == "ticker") {
+      if (!j.contains("type")) return;
+
+      std::string type = j["type"];
+      if (type == "ticker") {
         std::string ticker = j["msg"]["market_ticker"];
         int64_t last_price = j["msg"]["last_price"];
         update_price(MarketId(ticker.c_str()), Price::from_cents(last_price),
                      Price::from_cents(100 - last_price));
+      } else if (type == "fill") {
+        std::string order_id = j["msg"]["order_id"];
+        int qty = j["msg"]["count"];
+        Price price = Price::from_cents(j["msg"]["price"]);
+        notify_fill(order_id, qty, price);
+      } else if (type == "order_status_change") {
+        std::string order_id = j["msg"]["order_id"];
+        std::string status_str = j["msg"]["status"];
+        OrderStatus status = OrderStatus::Open;
+        if (status_str == "canceled") status = OrderStatus::Cancelled;
+        else if (status_str == "rejected") status = OrderStatus::Rejected;
+        else if (status_str == "filled") status = OrderStatus::Filled;
+        notify_status(order_id, status);
       }
     } catch (...) {
     }
