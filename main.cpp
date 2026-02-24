@@ -4,24 +4,7 @@
 #include <iostream>
 #include <thread>
 
-struct MockEngine : public ExecutionEngine {
-  int64_t get_position(MarketId) const override { return 100; }
-  Price get_balance() const override { return Price::from_usd(10000); }
-  Price get_exposure() const override { return Price::from_usd(500); }
-  Price get_price(MarketId, bool) const override {
-    return Price::from_cents(52);
-  }
-  Price get_depth(MarketId, bool) const override {
-    return Price::from_cents(50);
-  }
-  int64_t get_volume(MarketId) const override {
-    static int64_t vol = 1000;
-    vol += 500; // Increase volume to simulate trades
-    return vol;
-  }
-};
-
-MockEngine RealLiveExchange;
+LiveExecutionEngine RealLiveExchange;
 ExecutionEngine &LiveExchange = RealLiveExchange;
 
 const char *tif_to_string(TimeInForce tif) {
@@ -368,6 +351,7 @@ void streaming_demo() {
 }
 
 int main() {
+  using namespace bop::exchanges;
   // Register backends for real-time tracking
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
