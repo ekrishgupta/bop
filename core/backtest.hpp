@@ -4,6 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <numeric>
+#include <random>
+#include <cmath>
 
 namespace bop {
 
@@ -15,6 +18,15 @@ struct LatencyModel {
 struct SlippageModel {
   double fixed_bps = 0.0;
   double vol_multiplier = 0.0;
+  double impact_constant = 0.0; // Price impact per share
+};
+
+struct BacktestStats {
+    std::vector<double> equity_curve;
+    std::vector<int64_t> timestamps;
+    double max_drawdown = 0.0;
+    double sharpe_ratio = 0.0;
+    int total_trades = 0;
 };
 
 /**
@@ -72,10 +84,16 @@ struct BacktestMarketBackend : public MarketBackend {
     std::string id = "backtest_" + std::to_string(next_id++);
     
     Order tracked_order = order;
-    int64_t latency = latency_model_.mean_latency_ns;
+    
+    // Simulate latency with a normal distribution
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::normal_distribution<> d(static_cast<double>(latency_model_.mean_latency_ns), 
+                               static_cast<double>(latency_model_.std_dev_ns));
+    
+    int64_t latency = static_cast<int64_t>(std::max(0.0, d(gen)));
     tracked_order.creation_timestamp_ns = current_time_ns_ + latency;
     
-    std::cout << "[BACKTEST] Created order " << id << " for " << order.market.ticker << " at " << current_time_ns_ << " visible at " << tracked_order.creation_timestamp_ns << std::endl;
     pending_orders_[id] = tracked_order;
     return id;
   }
@@ -92,14 +110,13 @@ struct BacktestMarketBackend : public MarketBackend {
       const auto &id = it->first;
       const auto &order = it->second;
       
-      std::cout << "[BACKTEST] Checking match for " << id << ": time=" << current_time_ns_ << " visible_at=" << order.creation_timestamp_ns << std::endl;
-
       if (current_time_ns_ < order.creation_timestamp_ns) {
         ++it;
         continue;
       }
 
       Price current_price = get_price(order.market, order.outcome_yes);
+      if (current_price.raw == 0) { ++it; continue; }
       
       bool filled = false;
       if (order.is_buy) {
@@ -115,14 +132,21 @@ struct BacktestMarketBackend : public MarketBackend {
       if (filled) {
         Price fill_price = order.price.raw == 0 ? current_price : order.price;
         
+        // Apply slippage
         if (slippage_model_.fixed_bps > 0) {
             double slippage = slippage_model_.fixed_bps / 10000.0;
             if (order.is_buy) fill_price = Price::from_double(fill_price.to_double() * (1.0 + slippage));
             else fill_price = Price::from_double(fill_price.to_double() * (1.0 - slippage));
         }
 
+        // Apply price impact
+        if (slippage_model_.impact_constant > 0) {
+            double impact = slippage_model_.impact_constant * order.quantity;
+            if (order.is_buy) fill_price.raw += static_cast<int64_t>(impact * 100);
+            else fill_price.raw -= static_cast<int64_t>(impact * 100);
+        }
+
         int qty = order.quantity;
-        
         if (order.is_buy) {
             positions_[order.market.hash] += qty;
             cached_balance_ = cached_balance_ - Price(fill_price.raw * qty / Price::SCALE);
@@ -171,33 +195,27 @@ public:
 
   void run_from_csv(const std::string &filename) {
     std::ifstream file(filename);
-    if (!file.is_open()) {
-      std::cerr << "[BACKTEST] Failed to open file: " << filename << std::endl;
-      return;
-    }
+    if (!file.is_open()) return;
 
-    std::cout << "[BACKTEST] Processing historical data from " << filename << "..." << std::endl;
     is_running = true;
-
     std::string line;
-    std::getline(file, line); // Skip header
+    std::getline(file, line); // header
 
     while (std::getline(file, line) && is_running) {
       std::stringstream ss(line);
-      std::string timestamp_str, ticker, yes_price_str, no_price_str;
-      
-      std::getline(ss, timestamp_str, ',');
+      std::string ts_s, ticker, yes_s, no_s;
+      std::getline(ss, ts_s, ',');
       std::getline(ss, ticker, ',');
-      std::getline(ss, yes_price_str, ',');
-      std::getline(ss, no_price_str, ',');
+      std::getline(ss, yes_s, ',');
+      std::getline(ss, no_s, ',');
 
       if (ticker.empty()) continue;
 
-      int64_t ts = std::stoll(timestamp_str);
+      int64_t ts = std::stoll(ts_s);
       set_current_time(ts * 1000000000LL);
 
-      Price yes_p = Price::from_double(std::stod(yes_price_str));
-      Price no_p = Price::from_double(std::stod(no_price_str));
+      Price yes_p = Price::from_double(std::stod(yes_s));
+      Price no_p = Price::from_double(std::stod(no_s));
       
       update_market(ticker, yes_p, no_p);
       GlobalAlgoManager.tick(*this);
@@ -207,10 +225,10 @@ public:
           bb->match_orders(this);
         }
       }
+      record_snapshot(ts);
     }
-    
     is_running = false;
-    std::cout << "[BACKTEST] Simulation complete." << std::endl;
+    calculate_stats();
   }
 
   void run_from_json(const std::string &filename) {
@@ -223,6 +241,9 @@ public:
         for (const auto& entry : data) {
             if (!is_running) break;
             std::string ticker = entry["ticker"];
+            int64_t ts = entry["timestamp"];
+            set_current_time(ts * 1000000000LL);
+
             Price yes_p = Price::from_double(entry["yes_price"].get<double>());
             Price no_p = Price::from_double(entry["no_price"].get<double>());
             update_market(ticker, yes_p, no_p);
@@ -230,13 +251,13 @@ public:
             for (auto b : backends_) {
                 if (auto bb = dynamic_cast<BacktestMarketBackend*>(const_cast<MarketBackend*>(b))) {
                     bb->match_orders(this);
-                } else {
-                    std::cout << "[BACKTEST] Found non-backtest backend: " << b->name() << std::endl;
                 }
             }
+            record_snapshot(ts);
         }
     } catch (...) {}
     is_running = false;
+    calculate_stats();
   }
 
   void update_market(const std::string &ticker, Price yes, Price no) {
@@ -248,8 +269,32 @@ public:
     }
   }
 
-  int64_t get_position(MarketId market) const override {
-    return ExecutionEngine::get_position(market);
+  void record_snapshot(int64_t ts) {
+      stats_.equity_curve.push_back(get_balance().to_double());
+      stats_.timestamps.push_back(ts);
+  }
+
+  void calculate_stats() {
+      if (stats_.equity_curve.size() < 2) return;
+      double peak = stats_.equity_curve[0];
+      double max_dd = 0.0;
+      std::vector<double> returns;
+      for (size_t i = 1; i < stats_.equity_curve.size(); ++i) {
+          double val = stats_.equity_curve[i];
+          if (val > peak) peak = val;
+          double dd = (peak - val) / peak;
+          if (dd > max_dd) max_dd = dd;
+          double ret = (val - stats_.equity_curve[i-1]) / stats_.equity_curve[i-1];
+          returns.push_back(ret);
+      }
+      stats_.max_drawdown = max_dd;
+      if (!returns.empty()) {
+          double sum = std::accumulate(returns.begin(), returns.end(), 0.0);
+          double mean = sum / returns.size();
+          double sq_sum = std::inner_product(returns.begin(), returns.end(), returns.begin(), 0.0);
+          double stdev = std::sqrt(sq_sum / returns.size() - mean * mean);
+          if (stdev > 0) stats_.sharpe_ratio = (mean / stdev) * std::sqrt(252 * 24 * 60);
+      }
   }
 
   Price get_balance() const override {
@@ -261,24 +306,20 @@ public:
   }
 
   void report() const {
-    std::cout << "\n" << std::string(40, '=') << "\n";
+    std::cout << "\n" << std::string(45, '=') << "\n";
     std::cout << "       BACKTEST PERFORMANCE REPORT\n";
-    std::cout << std::string(40, '=') << "\n";
-    
-    Price total_balance = get_balance();
-    std::cout << "Final Balance:    " << total_balance << "\n";
-    
-    // In a real system, we'd calculate drawdown, Sharpe ratio, etc.
-    // For now, let's list the positions.
-    std::cout << "Positions:\n";
-    for (auto b : backends_) {
-        std::cout << "  - " << b->name() << ": " << b->get_positions() << "\n";
-    }
-    std::cout << std::string(40, '=') << "\n";
+    std::cout << std::string(45, '=') << "\n";
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Final Balance:    $" << get_balance().to_double() << "\n";
+    std::cout << "Max Drawdown:     " << (stats_.max_drawdown * 100.0) << "%\n";
+    std::cout << "Sharpe Ratio:     " << stats_.sharpe_ratio << "\n";
+    std::cout << "Data Points:      " << stats_.equity_curve.size() << "\n";
+    std::cout << std::string(45, '=') << "\n";
   }
 
 private:
   int64_t current_time_ns_ = 0;
+  BacktestStats stats_;
 };
 
 } // namespace bop
