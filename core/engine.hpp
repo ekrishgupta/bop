@@ -115,7 +115,7 @@ struct ExecutionEngine {
     for (auto b : backends_) {
       std::cout << "[ENGINE] Syncing markets for " << b->name() << "..."
                 << std::endl;
-      const_cast<MarketBackend *>(b)->sync_markets();
+      const_cast<MarketBackend *>(b)->load_markets();
     }
   }
 
@@ -138,9 +138,6 @@ struct ExecutionEngine {
     order_store.add_fill(id, qty, price);
 
     // 3. Real-time PnL tracking (simplified realized PnL delta)
-    // In a real system, we'd compare price to cost basis.
-    // For demonstration of kill-switch teeth, we'll assume a 1% slippage loss
-    // on every fill to simulate a "bad day" if many orders fill.
     int64_t simulated_loss = (price.raw * qty) / 100;
     current_daily_pnl_raw -= simulated_loss;
 
@@ -189,10 +186,6 @@ struct ExecutionEngine {
     // 2. Sector Exposure
     std::string sector = get_sector(o.market.ticker);
     Price sector_exposure(0);
-    // (In a real implementation, we'd iterate cached_positions and sum by
-    // sector)
-    // For now, let's just log that we are checking the sector.
-    // std::cout << "[RISK] Checking sector: " << sector << std::endl;
 
     // 3. Fat-Finger Price Protection
     if (o.price.raw > 0) {
@@ -291,21 +284,10 @@ struct ExecutionEngine {
   }
 
   virtual int64_t get_volume(MarketId market) const { 
-    for (auto b : backends_) {
-        int64_t v = b->clob_get_last_trade_price(market).raw; // Fallback or specific volume call
-        // Many backends don't have a direct get_volume in the base class yet
-    }
     return 0; 
   }
 
-  virtual void run() {
-    is_running = true;
-    std::cout << "[ENGINE] Starting default responsive event loop..." << std::endl;
-    while (is_running) {
-      GlobalAlgoManager.tick(*this);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-  }
+  virtual void run();
   virtual void trigger_tick() {}
 };
 
@@ -319,145 +301,20 @@ class LiveExecutionEngine : public ExecutionEngine {
 
 public:
   LiveExecutionEngine() = default;
-  ~LiveExecutionEngine() {
-    stop();
-    if (sync_thread.joinable()) sync_thread.join();
-    tick_cv.notify_all();
-  }
+  ~LiveExecutionEngine();
 
   void trigger_tick() override {
     tick_cv.notify_one();
   }
 
-  int64_t get_position(MarketId market) const override {
-    std::lock_guard<std::mutex> lock(mtx);
-    auto it = cached_positions.find(market.hash);
-    return (it != cached_positions.end()) ? it->second : 0;
-  }
-
-  Price get_balance() const override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return cached_balance;
-  }
-
-  Price get_exposure() const override {
-    std::lock_guard<std::mutex> lock(mtx);
-    Price total_exposure(0);
-    // Note: To calculate real exposure, we'd need to map hashes back to tickers
-    // and query live prices. Since we cache positions by hash, we'll iterate
-    // and try to find a matching price in our backends.
-    for (auto const &[hash, qty] : cached_positions) {
-      if (qty == 0) continue;
-      // Find current price for this market hash
-      for (auto b : backends_) {
-        // This is still a bit approximate as we don't store hash->ticker map
-        // globally yet. In a production app, we'd store the ticker string
-        // during sync_state.
-      }
-    }
-    return total_exposure;
-  }
-
-  Price get_pnl() const override {
-    // Requires tracking entry prices (cost basis), which would be done
-    // in add_order_fill.
-    return Price(0);
-  }
-
-  void run() override {
-    is_running = true;
-
-    // Perform initial synchronous sync to ensure balance/positions are available immediately
-    std::cout << "[LIVE ENGINE] Performing initial state sync..." << std::endl;
-    sync_state();
-
-    sync_thread = std::thread([this]() {
-      while (is_running) {
-        sync_state();
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-      }
-    });
-
-    std::cout << "[LIVE ENGINE] Starting responsive event loop (WebSocket driven)..."
-              << std::endl;
-    while (is_running) {
-      {
-        std::unique_lock<std::mutex> lock(tick_mtx);
-        // Wait for market update OR 100ms timeout (for time-based algos like TWAP)
-        tick_cv.wait_for(lock, std::chrono::milliseconds(100));
-      }
-
-      if (!is_running) break;
-
-      GlobalAlgoManager.tick(*this);
-      check_kill_switch();
-    }
-  }
+  int64_t get_position(MarketId market) const override;
+  Price get_balance() const override;
+  Price get_exposure() const override;
+  Price get_pnl() const override;
+  void run() override;
 
 private:
-  void sync_state() {
-    Price total_balance(0);
-    std::unordered_map<uint32_t, int64_t> new_positions;
-
-    for (auto b : backends_) {
-      total_balance = total_balance + b->get_balance();
-      
-      std::string pos_json = b->get_positions();
-      try {
-        auto j = nlohmann::json::parse(pos_json);
-        
-        // Handle array directly (Polymarket CLOB style)
-        if (j.is_array()) {
-            for (const auto &p : j) {
-                std::string ticker;
-                if (p.contains("asset_id")) ticker = p["asset_id"];
-                else if (p.contains("token_id")) ticker = p["token_id"];
-
-                if (!ticker.empty() && p.contains("size")) {
-                    int64_t qty = std::stoll(p["size"].get<std::string>());
-                    new_positions[fnv1a(ticker.c_str())] += qty;
-                }
-            }
-        } 
-        // Handle Kalshi v2 style
-        else if (j.contains("market_positions")) {
-            for (const auto &p : j["market_positions"]) {
-                std::string ticker = p["ticker"];
-                int64_t qty = p["position"].get<int64_t>();
-                new_positions[fnv1a(ticker.c_str())] += qty;
-            }
-        }
-        // Handle generic 'positions' object
-        else if (j.contains("positions")) {
-          for (const auto &p : j["positions"]) {
-            std::string ticker;
-            if (p.contains("market_ticker")) ticker = p["market_ticker"];
-            else if (p.contains("token_id")) ticker = p["token_id"];
-            else if (p.contains("ticker")) ticker = p["ticker"];
-
-            if (!ticker.empty()) {
-                int64_t qty = 0;
-                if (p.contains("quantity")) qty = p["quantity"].get<int64_t>();
-                else if (p.contains("position")) qty = p["position"].get<int64_t>();
-                else if (p.contains("size")) {
-                    if (p["size"].is_string()) qty = std::stoll(p["size"].get<std::string>());
-                    else qty = p["size"].get<int64_t>();
-                }
-                new_positions[fnv1a(ticker.c_str())] += qty;
-            }
-          }
-        }
-      } catch (...) {}
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(mtx);
-      cached_balance = total_balance;
-      cached_positions = std::move(new_positions);
-      db.log_pnl_snapshot(cached_balance, get_pnl(), current_daily_pnl_raw.load());
-    }
-    std::cout << "[LIVE ENGINE] Synced state: Balance=" << cached_balance << " Markets=" << cached_positions.size() << std::endl;
-  }
+  void sync_state();
 };
 
 } // namespace bop
@@ -466,7 +323,84 @@ extern bop::ExecutionEngine &LiveExchange;
 
 #include "algo_manager.hpp"
 
-// Final Dispatch Operators
+namespace bop {
+
+template <typename Tag> inline bool RelativeCondition<Tag>::eval() const {
+  if constexpr (std::is_same_v<Tag, PriceTag>) {
+    Price l_val = left.backend
+                      ? left.backend->get_price(left.market, left.outcome_yes)
+                      : LiveExchange.get_price(left.market, left.outcome_yes);
+    Price r_val =
+        right.backend
+            ? right.backend->get_price(right.market, right.outcome_yes)
+            : LiveExchange.get_price(right.market, right.outcome_yes);
+    return is_greater ? l_val > r_val : l_val < r_val;
+  } else {
+    return false;
+  }
+}
+
+template <typename Tag, typename Q>
+inline bool Condition<Tag, Q>::eval() const {
+  if constexpr (std::is_same_v<Tag, PositionTag>) {
+    int64_t val = LiveExchange.get_position(query.market);
+    return is_greater ? val > threshold : val < threshold;
+  } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
+    Price val = LiveExchange.get_balance();
+    return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
+    Price val = LiveExchange.get_exposure();
+    return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, PnLTag>) {
+    Price val = LiveExchange.get_pnl();
+    return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, PriceTag>) {
+    Price val = query.backend
+                    ? query.backend->get_price(query.market, query.outcome_yes)
+                    : LiveExchange.get_price(query.market, query.outcome_yes);
+    return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, DepthTag>) {
+    Price val = query.backend
+                    ? query.backend->get_depth(query.market, query.outcome_yes)
+                    : LiveExchange.get_depth(query.market, query.outcome_yes);
+    return is_greater ? val.raw > threshold : val.raw < threshold;
+  } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
+    size_t val = LiveExchange.get_open_order_count(query.market);
+    return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
+  }
+  return false;
+}
+
+} // namespace bop
+
+template <typename T>
+class PersistentConditionalStrategy : public bop::ExecutionStrategy {
+  bop::ConditionalOrder<T> co;
+
+public:
+  PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order) : co(order) {}
+  bool tick(bop::ExecutionEngine &engine) override {
+    if (co.condition.eval()) {
+      std::cout << "[STRATEGY] Condition met! Triggering order..." << std::endl;
+      co.order >> engine;
+      return true;
+    }
+    return false;
+  }
+};
+
+namespace bop {
+
+template <typename T>
+inline void operator>>(const bop::ConditionalOrder<T> &co,
+                       bop::ExecutionEngine &engine) {
+  std::cout << "[STRATEGY] Registering persistent conditional order..."
+            << std::endl;
+  bop::GlobalAlgoManager.submit_strategy(
+      std::make_unique<PersistentConditionalStrategy<T>>(co));
+}
+
+// Restored Operators
 inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
   bop::Order order_to_dispatch = o;
 
@@ -546,87 +480,10 @@ inline void operator>>(std::initializer_list<bop::Order> batch,
   }
 }
 
-namespace bop {
-
-template <typename Tag> inline bool RelativeCondition<Tag>::eval() const {
-  if constexpr (std::is_same_v<Tag, PriceTag>) {
-    Price l_val = left.backend
-                      ? left.backend->get_price(left.market, left.outcome_yes)
-                      : LiveExchange.get_price(left.market, left.outcome_yes);
-    Price r_val =
-        right.backend
-            ? right.backend->get_price(right.market, right.outcome_yes)
-            : LiveExchange.get_price(right.market, right.outcome_yes);
-    return is_greater ? l_val > r_val : l_val < r_val;
-  } else {
-    int64_t l_val = 0;
-    int64_t r_val = 0;
-    return is_greater ? l_val > r_val : l_val < r_val;
-  }
-}
-
-template <typename Tag, typename Q>
-inline bool Condition<Tag, Q>::eval() const {
-  if constexpr (std::is_same_v<Tag, PositionTag>) {
-    int64_t val = LiveExchange.get_position(query.market);
-    return is_greater ? val > threshold : val < threshold;
-  } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
-    Price val = LiveExchange.get_balance();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
-    Price val = LiveExchange.get_exposure();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, PnLTag>) {
-    Price val = LiveExchange.get_pnl();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, PriceTag>) {
-    Price val = query.backend
-                    ? query.backend->get_price(query.market, query.outcome_yes)
-                    : LiveExchange.get_price(query.market, query.outcome_yes);
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, DepthTag>) {
-    Price val = query.backend
-                    ? query.backend->get_depth(query.market, query.outcome_yes)
-                    : LiveExchange.get_depth(query.market, query.outcome_yes);
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
-    size_t val = LiveExchange.get_open_order_count(query.market);
-    return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
-  }
-  return false;
-}
-
-} // namespace bop
-
-template <typename T>
-class PersistentConditionalStrategy : public bop::ExecutionStrategy {
-  bop::ConditionalOrder<T> co;
-
-public:
-  PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order) : co(order) {}
-  bool tick(bop::ExecutionEngine &engine) override {
-    if (co.condition.eval()) {
-      std::cout << "[STRATEGY] Condition met! Triggering order..." << std::endl;
-      co.order >> engine;
-      return true; // Strategy completed
-    }
-    return false; // Continue monitoring
-  }
-};
-
-namespace bop {
-
-template <typename T>
-inline void operator>>(const bop::ConditionalOrder<T> &co,
-                       bop::ExecutionEngine &engine) {
-  std::cout << "[STRATEGY] Registering persistent conditional order..."
-            << std::endl;
-  bop::GlobalAlgoManager.submit_strategy(
-      std::make_unique<PersistentConditionalStrategy<T>>(co));
-}
-
 inline void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
   std::cout << "[OCO] Dispatching OCO pair..." << std::endl;
   oco.order1 >> engine;
   oco.order2 >> engine;
 }
+
+} // namespace bop
