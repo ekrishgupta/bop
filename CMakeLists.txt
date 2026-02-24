@@ -57,3 +57,6 @@ target_link_libraries(main PRIVATE bop_core)
 
 add_executable(backtest_example examples/backtest_example.cpp)
 target_link_libraries(backtest_example PRIVATE bop_core)
+
+add_executable(universal_market_example examples/universal_market_example.cpp)
+target_link_libraries(universal_market_example PRIVATE bop_core)
