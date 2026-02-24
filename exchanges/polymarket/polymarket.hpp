@@ -84,8 +84,22 @@ struct Polymarket : public MarketBackend {
   }
   bool cancel_order(const std::string &) const override { return true; }
 
-  // --- Portfolio (Mock via CLOB) ---
-  Price get_balance() const override { return Price::from_usd(500000); }
+  // --- Portfolio (REST via CLOB) ---
+  Price get_balance() const override {
+    std::string path = "/balance-allowance?asset_type=collateral";
+    std::string url = "https://clob.polymarket.com" + path;
+    try {
+      auto resp = Network.get(url, auth_headers("GET", path));
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        // Polymarket returns balance as a string decimal
+        return Price::from_double(std::stod(j["balance"].get<std::string>()));
+      }
+    } catch (...) {
+    }
+    return Price(0);
+  }
+
   std::string get_positions() const override { return "{\"positions\": []}"; }
 
   // --- WebSocket Streaming ---
@@ -107,16 +121,28 @@ struct Polymarket : public MarketBackend {
     std::cout << "[POLYMARKET] WS Unsubscribe: " << market.hash << std::endl;
   }
 
-  // Authentication
-  std::string sign_request(const std::string &method, const std::string &path,
-                           const std::string &body = "") const {
+  // Authentication Helpers
+  std::map<std::string, std::string>
+  auth_headers(const std::string &method, const std::string &path,
+               const std::string &body = "") const {
     auto now = std::chrono::system_clock::now();
-    auto ms =
+    auto s =
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
             .count();
-    std::string timestamp = std::to_string(ms);
-    return auth::PolySigner::sign(credentials.secret_key, timestamp, method,
-                                  path, body);
+    std::string timestamp = std::to_string(s);
+    std::string signature = auth::PolySigner::sign(
+        credentials.secret_key, timestamp, method, path, body);
+
+    return {{"POLY-API-KEY", credentials.api_key},
+            {"POLY-PASSPHRASE", credentials.passphrase},
+            {"POLY-SIGNATURE", signature},
+            {"POLY-TIMESTAMP", timestamp}};
+  }
+
+  std::string sign_request(const std::string &method, const std::string &path,
+                           const std::string &body = "") const {
+    auto headers = auth_headers(method, path, body);
+    return headers.at("POLY-SIGNATURE");
   }
 };
 
