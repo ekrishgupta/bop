@@ -116,7 +116,7 @@ struct ExecutionEngine {
     for (auto b : backends_) {
       std::cout << "[ENGINE] Syncing markets for " << b->name() << "..."
                 << std::endl;
-      const_cast<MarketBackend *>(b)->load_markets();
+      const_cast<MarketBackend *>(b)->sync_markets();
     }
   }
 
