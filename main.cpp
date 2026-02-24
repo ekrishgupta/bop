@@ -339,6 +339,28 @@ void algo_logic_demo() {
   }
 }
 
+void streaming_demo() {
+  std::cout << "\nRunning Streaming & WebSocket Demo...\n";
+  using namespace bop::exchanges;
+
+  // 1. Subscribe to Kalshi Orderbook
+  // The MarketId("BTC") will automatically trigger the WS subscription logic
+  kalshi.ws_subscribe_orderbook(MarketId("BTC"), [](const OrderBook &ob) {
+    if (!ob.bids.empty()) {
+      std::cout << "[CALLBACK] Kalshi BTC Book Update -> Best Bid: "
+                << ob.bids[0].price << std::endl;
+    }
+  });
+
+  // 2. Subscribe to PolyMarket Trades
+  polymarket.ws_subscribe_trades(MarketId("BTC"), [](Price p, int64_t qty) {
+    std::cout << "[CALLBACK] Poly BTC Trade -> " << qty << " @ " << p
+              << std::endl;
+  });
+
+  std::cout << "Subscribed to live feeds. (Simulation mode)\n";
+}
+
 int main() {
   my_strategy();
   risk_aware_strategy();
@@ -346,5 +368,6 @@ int main() {
   arbitrage_strategy();
   auth_demo();
   algo_logic_demo();
+  streaming_demo();
   return 0;
 }
