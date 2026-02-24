@@ -108,33 +108,48 @@ struct Polymarket : public StreamingMarketBackend {
 
   void handle_message(const std::string &msg) override {
     try {
-      auto j = json::parse(msg);
-      if (j.is_array()) {
-          for (const auto &item : j) handle_message(item.dump());
-          return;
-      }
+      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.capacity());
+      
+      auto process_event = [this](auto event) {
+        std::string_view type;
+        if (event["event_type"].get(type)) return;
 
-      if (j.contains("event_type")) {
-          std::string type = j["event_type"];
-          if (type == "price_change") {
-            std::string token_id = j["token_id"];
-            double price = std::stod(j["price"].get<std::string>());
-            update_price(MarketId(token_id.c_str()), Price::from_double(price),
+        if (type == "price_change") {
+          std::string_view token_id;
+          std::string_view price_str;
+          if (!event["token_id"].get(token_id) && !event["price"].get(price_str)) {
+            double price = std::stod(std::string(price_str));
+            update_price(MarketId(std::string(token_id).c_str()), Price::from_double(price),
                          Price::from_double(1.0 - price));
-          } else if (type == "order_update") {
-            auto order = j["order"];
-            std::string id = order["id"];
-            std::string status_str = j["status"];
-            
-            if (j.contains("fill_size") && std::stod(j["fill_size"].get<std::string>()) > 0) {
-                int qty = static_cast<int>(std::stod(j["fill_size"].get<std::string>()));
-                Price price = Price::from_double(std::stod(j["fill_price"].get<std::string>()));
-                notify_fill(id, qty, price);
-            }
-
-            if (status_str == "closed") notify_status(id, OrderStatus::Filled);
-            else if (status_str == "canceled") notify_status(id, OrderStatus::Cancelled);
           }
+        } else if (type == "order_update") {
+          auto order = event["order"];
+          std::string_view id;
+          std::string_view status_str;
+          if (!order["id"].get(id) && !event["status"].get(status_str)) {
+            std::string_view fill_size_str;
+            if (!event["fill_size"].get(fill_size_str)) {
+              double fill_size = std::stod(std::string(fill_size_str));
+              if (fill_size > 0) {
+                std::string_view fill_price_str;
+                if (!event["fill_price"].get(fill_price_str)) {
+                  double fill_price = std::stod(std::string(fill_price_str));
+                  notify_fill(std::string(id), static_cast<int>(fill_size), Price::from_double(fill_price));
+                }
+              }
+            }
+            if (status_str == "closed") notify_status(std::string(id), OrderStatus::Filled);
+            else if (status_str == "canceled") notify_status(std::string(id), OrderStatus::Cancelled);
+          }
+        }
+      };
+
+      if (doc.type() == simdjson::ondemand::json_type::array) {
+        for (auto item : doc.get_array()) {
+          process_event(item.get_object());
+        }
+      } else {
+        process_event(doc.get_object());
       }
     } catch (...) {
     }
