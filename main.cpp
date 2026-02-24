@@ -307,6 +307,10 @@ void auth_demo() {
   // Set Polymarket Credentials
   polymarket.set_credentials({"", "0x_my_private_key", "", "0x_my_address"});
 
+  // Load Markets for mapping tickers to IDs
+  kalshi.load_markets();
+  polymarket.load_markets();
+
   std::string p_sign =
       polymarket.sign_request("POST", "/orders", "{\"qty\":10}");
   std::cout << "Polymarket Signature: " << p_sign << std::endl;
