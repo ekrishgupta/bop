@@ -78,6 +78,7 @@ struct Order {
   Price sl_price = Price(0);
   SelfTradePrevention stp = SelfTradePrevention::None;
   int64_t creation_timestamp_ns = 0;
+  uint64_t nonce = 0;
   const MarketBackend *backend = nullptr;
 
   AlgoType algo_type = AlgoType::None;
