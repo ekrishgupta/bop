@@ -21,6 +21,14 @@ public:
     if (ws_) {
       ws_->on_message(
           [this](const std::string &msg) { this->handle_message(msg); });
+
+      // Handle automatic re-subscription on connection/reconnection
+      ws_->on_open([this]() {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        for (const auto &[hash, market] : active_subscriptions_) {
+          send_subscription(market);
+        }
+      });
     }
   }
 
@@ -60,6 +68,7 @@ public:
       std::function<void(const OrderBook &)> callback) const override {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     callbacks_[market.hash] = callback;
+    active_subscriptions_[market.hash] = market; // Track for re-subscription
     if (ws_ && ws_->is_connected()) {
       send_subscription(market);
     }
@@ -99,6 +108,7 @@ protected:
   mutable std::map<uint32_t, PricePair> price_cache_;
   mutable std::map<uint32_t, OrderBook> orderbook_cache_;
   mutable std::map<uint32_t, std::function<void(const OrderBook &)>> callbacks_;
+  mutable std::map<uint32_t, MarketId> active_subscriptions_;
 };
 
 } // namespace bop
