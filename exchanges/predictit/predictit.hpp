@@ -17,7 +17,7 @@ struct PredictIt : public StreamingMarketBackend {
 
   std::string name() const override { return "PredictIt"; }
 
-  void load_markets() override {
+  void sync_markets() override {
     // Fetch all markets
     std::string url = "https://www.predictit.org/api/marketdata/all/";
     try {
