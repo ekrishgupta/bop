@@ -2,6 +2,7 @@
 
 #include "market_base.hpp"
 #include "websocket.hpp"
+#include "simdjson.h"
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -114,6 +115,7 @@ protected:
   mutable std::mutex cache_mutex_;
   std::unique_ptr<WebSocketClient> ws_;
   ExecutionEngine* engine_ = nullptr;
+  mutable simdjson::ondemand::parser parser_;
 
   struct PricePair {
     Price yes_price;
