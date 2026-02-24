@@ -42,6 +42,34 @@ struct RiskLimits {
   bool dynamic_sizing_enabled = false;
   double risk_per_trade_percent = 0.02; // Risk 2% of equity per trade
   int64_t min_order_quantity = 1;
+
+  // Circuit Breakers
+  double volatility_threshold = 0.50; // 50% spike in rolling vol
+  bool circuit_breakers_enabled = true;
+};
+
+struct VolatilityTracker {
+    std::deque<double> returns;
+    size_t window_size = 20;
+    double current_vol = 0.0;
+
+    void add_price(Price p) {
+        static Price last_p = Price(0);
+        if (last_p.raw > 0) {
+            double ret = std::abs(p.to_double() - last_p.to_double()) / last_p.to_double();
+            returns.push_back(ret);
+            if (returns.size() > window_size) returns.pop_front();
+            
+            // Calculate Std Dev
+            double sum = 0;
+            for (double r : returns) sum += r;
+            double mean = sum / returns.size();
+            double sq_sum = 0;
+            for (double r : returns) sq_sum += (r - mean) * (r - mean);
+            current_vol = std::sqrt(sq_sum / returns.size());
+        }
+        last_p = p;
+    }
 };
 
 struct ExecutionEngine {
@@ -52,6 +80,8 @@ struct ExecutionEngine {
   std::atomic<int64_t> current_daily_pnl_raw{0};
   std::unordered_map<std::string, std::string> market_to_sector;
   std::unordered_map<uint32_t, std::unordered_map<uint32_t, double>> correlations;
+  std::unordered_map<uint32_t, VolatilityTracker> market_volatility;
+  std::atomic<bool> circuit_breaker_active{false};
   mutable std::mutex risk_mtx;
   Database db;
   std::atomic<int64_t> last_tick_time_ns{0};
@@ -155,39 +185,14 @@ struct ExecutionEngine {
     for (auto b : backends_) {
       std::cout << "[ENGINE] Syncing markets for " << b->name() << "..."
                 << std::endl;
-      const_cast<MarketBackend *>(b)->load_markets();
+      const_cast<MarketBackend *>(b)->sync_markets();
     }
   }
 
   // Order Tracking
-  void track_order(const std::string &id, const Order &o) {
-    db.log_order(id, o);
-    order_store.track(id, o);
-  }
-
-  void update_order_status(const std::string &id, OrderStatus status) {
-    db.log_status(id, status);
-    order_store.update_status(id, status);
-    GlobalAlgoManager.broadcast_execution_event(*this, id, status);
-  }
-
-  void add_order_fill(const std::string &id, int qty, Price price) {
-    // 1. Update persistent store
-    db.log_fill(id, qty, price);
-
-    // 2. Update order store
-    order_store.add_fill(id, qty, price);
-
-    // 3. Real-time PnL tracking (simplified realized PnL delta)
-    int64_t simulated_loss = (price.raw * qty) / 100;
-    current_daily_pnl_raw -= simulated_loss;
-
-    std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ "
-              << price << " (Daily PnL: " << Price(current_daily_pnl_raw.load())
-              << ")" << std::endl;
-
-    check_kill_switch();
-  }
+  void track_order(const std::string &id, const Order &o);
+  void update_order_status(const std::string &id, OrderStatus status);
+  void add_order_fill(const std::string &id, int qty, Price price);
 
   // Risk Management
   bool check_risk(const Order &o) const {
@@ -198,6 +203,12 @@ struct ExecutionEngine {
       std::cerr << "[RISK] REJECT: Kill-switch is ACTIVE. Daily loss: "
                 << Price(current_daily_pnl_raw.load()) << std::endl;
       return false;
+    }
+
+    // 0.05 Circuit Breaker
+    if (circuit_breaker_active.load()) {
+        std::cerr << "[RISK] REJECT: Circuit breaker is ACTIVE due to high volatility." << std::endl;
+        return false;
     }
 
     // 0.1 Leverage Check
@@ -420,54 +431,13 @@ inline bool Condition<Tag, Q>::eval() const {
   return false;
 }
 
-} // namespace bop
-
-namespace bop {
-
 template <typename T>
 class PersistentConditionalStrategy : public bop::ExecutionStrategy {
   bop::ConditionalOrder<T> co;
 
 public:
   PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order) : co(order) {}
-  bool tick(bop::ExecutionEngine &engine) override {
-    if (co.condition.eval()) {
-      std::cout << "[STRATEGY] Condition met! Triggering order..." << std::endl;
-      co.order >> engine;
-      return true;
-    }
-    return false;
-  }
-};
-
-class ExecutionEventStrategy : public bop::ExecutionStrategy {
-  MarketTarget::EventBinder binder;
-  Order next_order;
-  bool triggered = false;
-
-public:
-  ExecutionEventStrategy(MarketTarget::EventBinder b, Order &&o) : binder(b), next_order(std::move(o)) {}
-  bool tick(bop::ExecutionEngine &engine) override { return triggered; }
-  
-  void on_execution_event(ExecutionEngine &engine, const std::string& id, OrderStatus s) override {
-    if (triggered) return;
-    
-    // Simple logic: if any order in this market changes status to what we want
-    // In a more complex version, we might track specific order IDs
-    bool match = false;
-    if (binder.type == MarketTarget::EventBinder::Type::Fill && s == OrderStatus::Filled) match = true;
-    if (binder.type == MarketTarget::EventBinder::Type::Cancel && s == OrderStatus::Cancelled) match = true;
-    if (binder.type == MarketTarget::EventBinder::Type::Error && s == OrderStatus::Rejected) match = true;
-
-    if (match) {
-        // Verify market (this requires looking up order ID in engine)
-        // For prototype, we'll assume it matches if it fired.
-        // In reality, we'd do: if (engine.order_store.get(id).market.hash == binder.market.hash)
-        std::cout << "[EVENT] Execution event triggered! Dispatching linked order." << std::endl;
-        next_order >> engine;
-        triggered = true;
-    }
-  }
+  bool tick(ExecutionEngine &engine) override;
 };
 
 template <typename T>
@@ -479,19 +449,7 @@ inline void operator>>(const bop::ConditionalOrder<T> &co,
       std::make_unique<PersistentConditionalStrategy<T>>(co));
 }
 
-inline void operator>>(MarketTarget::EventBinder binder, Order &&o) {
-    std::cout << "[EVENT] Registering event-driven strategy..." << std::endl;
-    bop::GlobalAlgoManager.submit_strategy(
-        std::make_unique<ExecutionEventStrategy>(binder, std::move(o)));
-}
-
-inline void operator>>(bop::MarketId event_m, std::function<void(bop::ExecutionEngine&)> action) {
-    std::cout << "[STRATEGY] Registering event-driven strategy..." << std::endl;
-    bop::GlobalAlgoManager.submit_strategy(
-        std::make_unique<bop::EventStrategy>(event_m, action));
-}
-
-// Restored Operators
+// Forward declare restored Operators
 void operator>>(const Order &o, ExecutionEngine &engine);
 void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine);
 void operator>>(const OCOOrder &oco, ExecutionEngine &engine);
