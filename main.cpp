@@ -364,6 +364,10 @@ void streaming_demo() {
 }
 
 int main() {
+  // Register backends for real-time tracking
+  RealLiveExchange.register_backend(&kalshi);
+  RealLiveExchange.register_backend(&polymarket);
+
   my_strategy();
   risk_aware_strategy();
   pro_strategy();
