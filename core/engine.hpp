@@ -3,6 +3,9 @@
 #include "core.hpp"
 #include "logic.hpp"
 #include <iostream>
+#include <atomic>
+#include <thread>
+#include <chrono>
 
 #include <initializer_list>
 #include <type_traits>
@@ -10,6 +13,10 @@
 namespace bop {
 
 struct ExecutionEngine {
+  std::atomic<bool> is_running{false};
+
+  virtual ~ExecutionEngine() = default;
+
   virtual int64_t get_position(MarketId market) const { return 0; }
   virtual Price get_balance() const { return Price(0); }
   virtual Price get_exposure() const { return Price(0); }
@@ -20,6 +27,10 @@ struct ExecutionEngine {
   virtual Price get_price(MarketId market, bool outcome_yes) const {
     return Price(0);
   }
+  virtual int64_t get_volume(MarketId market) const { return 0; }
+
+  virtual void stop() { is_running = false; }
+  virtual void run(); 
 };
 
 } // namespace bop
@@ -27,6 +38,18 @@ struct ExecutionEngine {
 extern bop::ExecutionEngine &LiveExchange;
 
 #include "algo_manager.hpp"
+
+namespace bop {
+inline void ExecutionEngine::run() {
+  is_running = true;
+  std::cout << "[ENGINE] Starting event loop..." << std::endl;
+  while (is_running) {
+    GlobalAlgoManager.tick(*this);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  std::cout << "[ENGINE] Event loop stopped." << std::endl;
+}
+} // namespace bop
 
 // Final Dispatch Operators
 inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
