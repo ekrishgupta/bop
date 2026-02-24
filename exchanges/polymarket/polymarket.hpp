@@ -79,8 +79,39 @@ struct Polymarket : public MarketBackend {
   }
 
   // --- Trading ---
-  std::string create_order(const Order &) const override {
-    return "polymarket_clob_uuid";
+  std::string create_order(const Order &o) const override {
+    std::string path = "/orders";
+    std::string url = "https://clob.polymarket.com" + path;
+
+    json j;
+    j["token_id"] = o.market.ticker;
+    j["price"] = o.price.to_usd_string();
+    j["size"] = std::to_string(o.quantity);
+    j["side"] = o.is_buy ? "BUY" : "SELL";
+    j["order_type"] = (o.price.raw == 0) ? "MARKET" : "LIMIT";
+    j["expiration"] = "0"; // GTC
+    j["timestamp"] = std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count() /
+        1000000000);
+
+    // In Polymarket, the owner/nonce/signature are part of the order payload
+    j["owner"] = credentials.address;
+    j["nonce"] = 0; // Should be tracked
+    j["signature"] = sign_request("POST", path, j.dump());
+
+    std::string body = j.dump();
+    try {
+      auto resp = Network.post(url, body, auth_headers("POST", path, body));
+      if (resp.status_code == 201 || resp.status_code == 200) {
+        auto res_j = resp.json_body();
+        return res_j["orderID"].get<std::string>();
+      } else {
+        std::cerr << "[POLYMARKET] Order Error: " << resp.body << std::endl;
+      }
+    } catch (const std::exception &e) {
+      std::cerr << "[POLYMARKET] Order Exception: " << e.what() << std::endl;
+    }
+    return "error";
   }
   bool cancel_order(const std::string &) const override { return true; }
 
