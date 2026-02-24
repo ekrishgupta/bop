@@ -20,8 +20,7 @@ struct SlippageModel {
 /**
  * @brief A backend for backtesting that simulates market behavior.
  */
-class BacktestMarketBackend : public MarketBackend {
-public:
+struct BacktestMarketBackend : public MarketBackend {
   explicit BacktestMarketBackend(const std::string &name) : name_(name) {
     cached_balance_ = Price::from_usd(10000); // Default backtest balance
   }
@@ -40,7 +39,6 @@ public:
   }
 
   Price get_depth(MarketId market, bool is_bid) const override {
-    // Simplified: depth is the same as the price in backtesting unless we have L2 data
     return get_price(market, is_bid);
   }
 
@@ -60,7 +58,6 @@ public:
       return j.dump();
   }
 
-  // Backtest specific controls
   void set_price(MarketId market, Price yes, Price no) {
     prices_[market.hash] = {yes, no};
     if (!market.ticker.empty()) {
@@ -75,10 +72,10 @@ public:
     std::string id = "backtest_" + std::to_string(next_id++);
     
     Order tracked_order = order;
-    // Add latency: order will only be visible/matchable after this time
-    int64_t latency = latency_model_.mean_latency_ns; // Simple for now
+    int64_t latency = latency_model_.mean_latency_ns;
     tracked_order.creation_timestamp_ns = current_time_ns_ + latency;
     
+    std::cout << "[BACKTEST] Created order " << id << " for " << order.market.ticker << " at " << current_time_ns_ << " visible at " << tracked_order.creation_timestamp_ns << std::endl;
     pending_orders_[id] = tracked_order;
     return id;
   }
@@ -95,7 +92,8 @@ public:
       const auto &id = it->first;
       const auto &order = it->second;
       
-      // Check if order has "arrived" at the exchange
+      std::cout << "[BACKTEST] Checking match for " << id << ": time=" << current_time_ns_ << " visible_at=" << order.creation_timestamp_ns << std::endl;
+
       if (current_time_ns_ < order.creation_timestamp_ns) {
         ++it;
         continue;
@@ -117,7 +115,6 @@ public:
       if (filled) {
         Price fill_price = order.price.raw == 0 ? current_price : order.price;
         
-        // Apply slippage
         if (slippage_model_.fixed_bps > 0) {
             double slippage = slippage_model_.fixed_bps / 10000.0;
             if (order.is_buy) fill_price = Price::from_double(fill_price.to_double() * (1.0 + slippage));
@@ -126,7 +123,6 @@ public:
 
         int qty = order.quantity;
         
-        // Update local state
         if (order.is_buy) {
             positions_[order.market.hash] += qty;
             cached_balance_ = cached_balance_ - Price(fill_price.raw * qty / Price::SCALE);
@@ -135,7 +131,6 @@ public:
             cached_balance_ = cached_balance_ + Price(fill_price.raw * qty / Price::SCALE);
         }
 
-        // Notify engine
         engine->add_order_fill(id, qty, fill_price);
         it = pending_orders_.erase(it);
       } else {
@@ -154,8 +149,6 @@ private:
   mutable std::map<uint32_t, std::string> hash_to_ticker_;
   mutable std::map<uint32_t, int64_t> positions_;
   mutable std::map<std::string, Order> pending_orders_;
-  LatencyModel latency_model_;
-  SlippageModel slippage_model_;
 };
 
 /**
@@ -165,13 +158,6 @@ class BacktestExecutionEngine : public ExecutionEngine {
 public:
   BacktestExecutionEngine() {
     is_running = false;
-  }
-
-  void run() override {
-    std::cout << "[BACKTEST] Starting historical simulation..." << std::endl;
-    is_running = true;
-    // In backtest mode, run() might not be used the same way as Live
-    // because we want to control the loop externally or via data feeding.
   }
 
   void set_current_time(int64_t ns) {
@@ -194,8 +180,7 @@ public:
     is_running = true;
 
     std::string line;
-    // Skip header if exists
-    std::getline(file, line);
+    std::getline(file, line); // Skip header
 
     while (std::getline(file, line) && is_running) {
       std::stringstream ss(line);
@@ -209,17 +194,14 @@ public:
       if (ticker.empty()) continue;
 
       int64_t ts = std::stoll(timestamp_str);
-      set_current_time(ts * 1000000000LL); // Convert seconds to ns
+      set_current_time(ts * 1000000000LL);
 
       Price yes_p = Price::from_double(std::stod(yes_price_str));
       Price no_p = Price::from_double(std::stod(no_price_str));
       
       update_market(ticker, yes_p, no_p);
-      
-      // Step the simulation
       GlobalAlgoManager.tick(*this);
       
-      // Match orders against new prices
       for (auto b : backends_) {
         if (auto bb = dynamic_cast<BacktestMarketBackend*>(const_cast<MarketBackend*>(b))) {
           bb->match_orders(this);
@@ -233,43 +215,28 @@ public:
 
   void run_from_json(const std::string &filename) {
     std::ifstream file(filename);
-    if (!file.is_open()) {
-      std::cerr << "[BACKTEST] Failed to open file: " << filename << std::endl;
-      return;
-    }
+    if (!file.is_open()) return;
 
-    std::cout << "[BACKTEST] Processing historical data from " << filename << "..." << std::endl;
     is_running = true;
-
     try {
         nlohmann::json data = nlohmann::json::parse(file);
         for (const auto& entry : data) {
             if (!is_running) break;
-
-            if (entry.contains("timestamp")) {
-                set_current_time(entry["timestamp"].get<int64_t>() * 1000000000LL);
-            }
-
             std::string ticker = entry["ticker"];
             Price yes_p = Price::from_double(entry["yes_price"].get<double>());
             Price no_p = Price::from_double(entry["no_price"].get<double>());
-
             update_market(ticker, yes_p, no_p);
-            
             GlobalAlgoManager.tick(*this);
-            
             for (auto b : backends_) {
                 if (auto bb = dynamic_cast<BacktestMarketBackend*>(const_cast<MarketBackend*>(b))) {
                     bb->match_orders(this);
+                } else {
+                    std::cout << "[BACKTEST] Found non-backtest backend: " << b->name() << std::endl;
                 }
             }
         }
-    } catch (const std::exception& e) {
-        std::cerr << "[BACKTEST] JSON error: " << e.what() << std::endl;
-    }
-
+    } catch (...) {}
     is_running = false;
-    std::cout << "[BACKTEST] Simulation complete." << std::endl;
   }
 
   void update_market(const std::string &ticker, Price yes, Price no) {
@@ -282,15 +249,6 @@ public:
   }
 
   int64_t get_position(MarketId market) const override {
-    for (auto b : backends_) {
-        if (auto bb = dynamic_cast<const BacktestMarketBackend*>(b)) {
-            // This is a bit of a hack since BacktestMarketBackend positions_ is private
-            // In a real implementation, we'd have a better way to query this.
-            // For now, let's use the JSON parsing inherited from ExecutionEngine or 
-            // implement a direct way.
-        }
-    }
-    // Fallback to base class logic which parses JSON from get_positions()
     return ExecutionEngine::get_position(market);
   }
 
@@ -300,6 +258,23 @@ public:
       total = total + b->get_balance();
     }
     return total;
+  }
+
+  void report() const {
+    std::cout << "\n" << std::string(40, '=') << "\n";
+    std::cout << "       BACKTEST PERFORMANCE REPORT\n";
+    std::cout << std::string(40, '=') << "\n";
+    
+    Price total_balance = get_balance();
+    std::cout << "Final Balance:    " << total_balance << "\n";
+    
+    // In a real system, we'd calculate drawdown, Sharpe ratio, etc.
+    // For now, let's list the positions.
+    std::cout << "Positions:\n";
+    for (auto b : backends_) {
+        std::cout << "  - " << b->name() << ": " << b->get_positions() << "\n";
+    }
+    std::cout << std::string(40, '=') << "\n";
   }
 
 private:
