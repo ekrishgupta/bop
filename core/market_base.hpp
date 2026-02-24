@@ -87,6 +87,7 @@ struct MarketBackend {
   virtual Price get_price(MarketId market, bool outcome_yes) const = 0;
   virtual Price get_depth(MarketId market, bool is_bid) const = 0;
   virtual OrderBook get_orderbook(MarketId market) const { return {}; }
+  virtual int64_t get_market_expiry(MarketId market) const { return 0; }
   virtual std::vector<Candlestick> get_candlesticks(MarketId market) const {
     return {};
   }

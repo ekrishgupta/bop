@@ -5,6 +5,7 @@
 #include "order_tracker.hpp"
 #include "streaming_backend.hpp"
 #include "database.hpp"
+#include "greek_engine.hpp"
 #include <iostream>
 #include <atomic>
 #include <thread>
@@ -82,6 +83,7 @@ struct ExecutionEngine {
   std::unordered_map<uint32_t, std::unordered_map<uint32_t, double>> correlations;
   std::unordered_map<uint32_t, VolatilityTracker> market_volatility;
   std::atomic<bool> circuit_breaker_active{false};
+  GreekEngine greek_engine;
   mutable std::mutex risk_mtx;
   Database db;
   std::atomic<int64_t> last_tick_time_ns{0};
@@ -367,7 +369,12 @@ public:
   Price get_balance() const override;
   Price get_exposure() const override;
   Price get_pnl() const override;
+  double get_portfolio_metric(PortfolioQuery::Metric metric) const override;
   void run() override;
+
+  const std::unordered_map<uint32_t, int64_t>& get_positions_map() const {
+      return cached_positions;
+  }
 
 private:
   void sync_state();

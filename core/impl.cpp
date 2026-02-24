@@ -70,6 +70,26 @@ Price LiveExecutionEngine::get_balance() const {
     return cached_balance;
 }
 
+double LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::unordered_map<uint32_t, double> volatilities;
+    for (auto const& [hash, tracker] : market_volatility) {
+        volatilities[hash] = tracker.current_vol;
+    }
+    
+    auto pg = const_cast<GreekEngine&>(greek_engine).calculate_portfolio_greeks(cached_positions, backends_, volatilities);
+    
+    switch (metric) {
+        case PortfolioQuery::Metric::TotalDelta: return pg.total_delta;
+        case PortfolioQuery::Metric::TotalGamma: return pg.total_gamma;
+        case PortfolioQuery::Metric::TotalTheta: return pg.total_theta;
+        case PortfolioQuery::Metric::TotalVega: return pg.total_vega;
+        case PortfolioQuery::Metric::NetExposure: return get_exposure().to_double();
+        case PortfolioQuery::Metric::PortfolioValue: return cached_balance.to_double();
+        default: return 0.0;
+    }
+}
+
 Price LiveExecutionEngine::get_exposure() const { return Price(0); }
 Price LiveExecutionEngine::get_pnl() const { return Price(0); }
 
