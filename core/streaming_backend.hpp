@@ -24,24 +24,35 @@ public:
     }
   }
 
-  // Market Data (Live) - Now returns cached data
+  // Market Data (Live) - Now returns cached data with fallback
   Price get_price(MarketId market, bool outcome_yes) const override {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    auto it = price_cache_.find(market.hash);
-    if (it != price_cache_.end()) {
-      return outcome_yes ? it->second.yes_price : it->second.no_price;
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      auto it = price_cache_.find(market.hash);
+      if (it != price_cache_.end()) {
+        return outcome_yes ? it->second.yes_price : it->second.no_price;
+      }
     }
+    return get_price_http(market, outcome_yes);
+  }
+
+  // Virtual fallbacks to be implemented by child or remain as defaults
+  virtual Price get_price_http(MarketId market, bool outcome_yes) const {
     return Price(0);
   }
 
   OrderBook get_orderbook(MarketId market) const override {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    auto it = orderbook_cache_.find(market.hash);
-    if (it != orderbook_cache_.end()) {
-      return it->second;
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      auto it = orderbook_cache_.find(market.hash);
+      if (it != orderbook_cache_.end()) {
+        return it->second;
+      }
     }
-    return {};
+    return get_orderbook_http(market);
   }
+
+  virtual OrderBook get_orderbook_http(MarketId market) const { return {}; }
 
   // WebSocket implementation
   void ws_subscribe_orderbook(
@@ -50,10 +61,11 @@ public:
     std::lock_guard<std::mutex> lock(cache_mutex_);
     callbacks_[market.hash] = callback;
     if (ws_ && ws_->is_connected()) {
-      ws_->send("{\"action\": \"subscribe\", \"market\": " +
-                std::to_string(market.hash) + "}");
+      send_subscription(market);
     }
   }
+
+  virtual void send_subscription(MarketId market) const = 0;
 
 protected:
   virtual void handle_message(const std::string &msg) = 0;
@@ -64,18 +76,17 @@ protected:
   }
 
   void update_orderbook(MarketId market, const OrderBook &ob) {
+    std::function<void(const OrderBook &)> cb;
     {
       std::lock_guard<std::mutex> lock(cache_mutex_);
       orderbook_cache_[market.hash] = ob;
+      auto it = callbacks_.find(market.hash);
+      if (it != callbacks_.end()) {
+        cb = it->second;
+      }
     }
-    // Trigger callback if registered
-    std::lock_guard<std::mutex> lock(
-        cache_mutex_); // Re-lock just in case, though usually you'd want a
-                       // separate mutex for callbacks to avoid deadlocks
-    auto it = callbacks_.find(market.hash);
-    if (it != callbacks_.end()) {
-      it->second(ob);
-    }
+    if (cb)
+      cb(ob);
   }
 
   mutable std::mutex cache_mutex_;
