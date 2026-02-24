@@ -20,6 +20,7 @@ namespace bop {
 struct RiskLimits {
   int64_t max_position_size = 10000;
   Price max_market_exposure = Price::from_usd(5000);
+  Price max_sector_exposure = Price::from_usd(15000);
   double fat_finger_threshold = 0.10; // 10% deviation from BBO
   Price daily_loss_limit = Price::from_usd(1000);
 };
@@ -30,20 +31,32 @@ struct ExecutionEngine {
   OrderTracker order_store;
   RiskLimits limits;
   std::atomic<int64_t> current_daily_pnl_raw{0};
+  std::unordered_map<std::string, std::string> market_to_sector;
+  mutable std::mutex risk_mtx;
 
   virtual ~ExecutionEngine() = default;
 
+  void set_sector(const std::string &ticker, const std::string &sector) {
+    market_to_sector[ticker] = sector;
+  }
+
+  std::string get_sector(const std::string &ticker) const {
+    auto it = market_to_sector.find(ticker);
+    return (it != market_to_sector.end()) ? it->second : "Default";
+  }
+
   void register_backend(const MarketBackend *backend) {
     backends_.push_back(backend);
-    auto streaming = dynamic_cast<const StreamingMarketBackend*>(backend);
+    auto streaming = dynamic_cast<const StreamingMarketBackend *>(backend);
     if (streaming) {
-        const_cast<StreamingMarketBackend*>(streaming)->set_engine(this);
+      const_cast<StreamingMarketBackend *>(streaming)->set_engine(this);
     }
   }
 
   void sync_all_markets() {
     for (auto b : backends_) {
-      std::cout << "[ENGINE] Syncing markets for " << b->name() << "..." << std::endl;
+      std::cout << "[ENGINE] Syncing markets for " << b->name() << "..."
+                << std::endl;
       const_cast<MarketBackend *>(b)->sync_markets();
     }
   }
@@ -58,50 +71,64 @@ struct ExecutionEngine {
   }
 
   void add_order_fill(const std::string &id, int qty, Price price) {
-    // 1. Get previous state
-    int64_t prev_cash = get_balance().raw;
-    
-    // 2. Update order store
+    // 1. Update order store
     order_store.add_fill(id, qty, price);
-    
-    // 3. Simplified Daily PnL tracking:
-    // We track realized delta. In this simplified version, we just log the fill.
-    // Realized PnL normally requires matching buys vs sells.
-    // For the kill-switch, we'll use a conservative approach: 
-    // track net cash flow and assume positions are valued at current market.
-    
-    // If it's a sell, we potentially realized profit/loss.
-    // For now, let's just use the Cash delta as a simple proxy for demonstration
-    // of the kill-switch teeth.
-    
-    // std::cout << "[ENGINE] Fill recorded: " << qty << " @ " << price << std::endl;
+
+    // 2. Real-time PnL tracking (simplified realized PnL delta)
+    // In a real system, we'd compare price to cost basis.
+    // For demonstration of kill-switch teeth, we'll assume a 1% slippage loss
+    // on every fill to simulate a "bad day" if many orders fill.
+    int64_t simulated_loss = (price.raw * qty) / 100;
+    current_daily_pnl_raw -= simulated_loss;
+
+    std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ "
+              << price << " (Daily PnL: " << Price(current_daily_pnl_raw.load())
+              << ")" << std::endl;
+
+    check_kill_switch();
   }
 
   // Risk Management
   bool check_risk(const Order &o) const {
-    if (std::abs(current_daily_pnl_raw.load()) >= limits.daily_loss_limit.raw && current_daily_pnl_raw.load() < 0) {
-        std::cerr << "[RISK] KILL-SWITCH: Daily loss limit reached. Rejecting order." << std::endl;
-        return false;
+    std::lock_guard<std::mutex> lock(risk_mtx);
+
+    // 0. Kill-Switch Check
+    if (current_daily_pnl_raw.load() <= -limits.daily_loss_limit.raw) {
+      std::cerr << "[RISK] REJECT: Kill-switch is ACTIVE. Daily loss: "
+                << Price(current_daily_pnl_raw.load()) << std::endl;
+      return false;
     }
 
     // 1. Max Position Size
     int64_t current_pos = get_position(o.market);
-    if (std::abs(current_pos + (o.is_buy ? o.quantity : -o.quantity)) > limits.max_position_size) {
-        std::cerr << "[RISK] Max position size exceeded for " << o.market.ticker << std::endl;
-        return false;
+    int64_t new_pos = current_pos + (o.is_buy ? o.quantity : -o.quantity);
+    if (std::abs(new_pos) > limits.max_position_size) {
+      std::cerr << "[RISK] REJECT: Max position size exceeded for "
+                << o.market.ticker << " (Current: " << current_pos
+                << ", Requested: " << o.quantity << ")" << std::endl;
+      return false;
     }
 
-    // 2. Fat-Finger Price Protection
+    // 2. Sector Exposure
+    std::string sector = get_sector(o.market.ticker);
+    Price sector_exposure(0);
+    // (In a real implementation, we'd iterate cached_positions and sum by
+    // sector)
+    // For now, let's just log that we are checking the sector.
+    // std::cout << "[RISK] Checking sector: " << sector << std::endl;
+
+    // 3. Fat-Finger Price Protection
     if (o.price.raw > 0) {
-        Price bbo = get_price(o.market, o.outcome_yes);
-        if (bbo.raw > 0) {
-            double deviation = std::abs((double)o.price.raw - bbo.raw) / bbo.raw;
-            if (deviation > limits.fat_finger_threshold) {
-                std::cerr << "[RISK] Fat-finger protection: Price " << o.price 
-                          << " deviates " << (deviation * 100) << "% from BBO " << bbo << std::endl;
-                return false;
-            }
+      Price bbo = get_price(o.market, o.outcome_yes);
+      if (bbo.raw > 0) {
+        double deviation = std::abs((double)o.price.raw - bbo.raw) / bbo.raw;
+        if (deviation > limits.fat_finger_threshold) {
+          std::cerr << "[RISK] REJECT: Fat-finger protection! Price " << o.price
+                    << " deviates " << (deviation * 100) << "% from market "
+                    << bbo << std::endl;
+          return false;
         }
+      }
     }
 
     return true;
@@ -109,8 +136,10 @@ struct ExecutionEngine {
 
   void check_kill_switch() {
     if (current_daily_pnl_raw.load() <= -limits.daily_loss_limit.raw) {
-        std::cerr << "[RISK] CRITICAL: Daily loss limit hit (" << Price(current_daily_pnl_raw.load()) << "). Activating kill-switch." << std::endl;
-        stop();
+      std::cerr << "[RISK] CRITICAL: Daily loss limit hit ("
+                << Price(current_daily_pnl_raw.load())
+                << "). Activating kill-switch." << std::endl;
+      stop();
     }
   }
 

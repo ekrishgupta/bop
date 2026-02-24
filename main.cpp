@@ -383,6 +383,13 @@ int main() {
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
 
+  // Configure Risk Management
+  RealLiveExchange.limits.max_position_size = 5000;
+  RealLiveExchange.limits.daily_loss_limit = Price::from_usd(2000);
+  RealLiveExchange.set_sector("BTC", "Crypto");
+  RealLiveExchange.set_sector("ETH", "Crypto");
+  RealLiveExchange.set_sector("FedRateCut", "Economics");
+
   // 3. Sync Markets & Discover Mapping
   std::cout << "[MAIN] Discovering markets..." << std::endl;
   RealLiveExchange.sync_all_markets();
@@ -415,6 +422,12 @@ int main() {
       Sell(5000_shares) / Market("BTC", kalshi) / NO + MarketPrice() |
       TWAP(15_min);
   twap_order >> LiveExchange;
+
+  // Strategy E: Fat-Finger Protection Demonstration
+  std::cout << "[MAIN] Deploying fat-finger demonstration..." << std::endl;
+  auto fat_finger = Buy(100_shares) / Market("BTC", kalshi) / YES +
+                    LimitPrice(Price::from_usd(100.0)); // Way above market
+  fat_finger >> LiveExchange;
 
   std::cout << "[MAIN] Engine running with " << GlobalAlgoManager.active_count()
             << " active strategies/algorithms." << std::endl;
