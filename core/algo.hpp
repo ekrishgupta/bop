@@ -19,6 +19,7 @@ public:
 class TWAPAlgo : public ExecutionAlgo {
   int64_t duration_sec;
   int64_t start_time_ns;
+  int64_t last_slice_time_ns = 0;
   int total_qty;
   int filled_qty = 0;
 
@@ -45,10 +46,22 @@ class PegAlgo : public ExecutionAlgo {
   Price offset;
   ReferencePrice ref;
   Price last_quoted_price = Price(-1);
+  int64_t last_update_time_ns = 0;
   std::string active_order_id;
 
 public:
   PegAlgo(const Order &o);
+  bool tick(ExecutionEngine &engine) override;
+};
+
+class VWAPAlgo : public ExecutionAlgo {
+  double participation_rate;
+  int total_qty;
+  int filled_qty = 0;
+  int64_t last_market_volume = -1;
+
+public:
+  VWAPAlgo(const Order &o);
   bool tick(ExecutionEngine &engine) override;
 };
 
