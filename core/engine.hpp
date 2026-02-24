@@ -25,6 +25,13 @@ struct ExecutionEngine {
     backends_.push_back(backend);
   }
 
+  void sync_all_markets() {
+    for (auto b : backends_) {
+      std::cout << "[ENGINE] Syncing markets for " << b->name() << "..." << std::endl;
+      const_cast<MarketBackend *>(b)->sync_markets();
+    }
+  }
+
   virtual int64_t get_position(MarketId market) const {
     return 0;
   }

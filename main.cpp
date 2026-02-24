@@ -356,6 +356,9 @@ int main() {
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
 
+  std::cout << "[MAIN] Synchronizing market data..." << std::endl;
+  RealLiveExchange.sync_all_markets();
+
   my_strategy();
   risk_aware_strategy();
   pro_strategy();

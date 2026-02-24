@@ -13,7 +13,7 @@ struct Kalshi : public StreamingMarketBackend {
 
   std::string name() const override { return "Kalshi"; }
 
-  void load_markets() override {
+  void sync_markets() override {
     std::string url = "https://api.elections.kalshi.com/trade-api/v2/markets";
     try {
       // Kalshi might require authentication for this endpoint if it's large,

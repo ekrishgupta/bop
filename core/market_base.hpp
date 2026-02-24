@@ -46,7 +46,7 @@ struct MarketBackend {
 
   void set_credentials(const auth::Credentials &creds) { credentials = creds; }
 
-  virtual void load_markets() {}
+  virtual void sync_markets() {}
 
   std::string resolve_ticker(const std::string &ticker) const {
     auto it = ticker_to_id.find(ticker);

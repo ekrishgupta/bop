@@ -13,33 +13,24 @@ struct Polymarket : public StreamingMarketBackend {
 
   std::string name() const override { return "Polymarket"; }
 
-  void load_markets() override {
-    std::string url = "https://clob.polymarket.com/markets";
+  void sync_markets() override {
+    std::string url = "https://gamma-api.polymarket.com/markets?active=true&limit=100";
     try {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
         auto j = resp.json_body();
         for (auto &m : j) {
-          if (!m.contains("active") || !m["active"].get<bool>())
-            continue;
+          std::string slug = m["slug"];
+          std::string cond_id = m["conditionId"];
+          
+          ticker_to_id[slug] = cond_id;
 
-          std::string cond_id = m["condition_id"];
-          // Polymarket sometimes has a 'ticker' field in Gamma, but in CLOB it
-          // might be different. Let's use the question or a derived ticker if
-          // available. For now, we'll map condition_id to condition_id and also
-          // store tokens.
-          ticker_to_id[cond_id] = cond_id;
-
-          if (m.contains("tokens")) {
-            for (auto &t : m["tokens"]) {
-              std::string outcome = t["outcome"];
-              std::string token_id = t["token_id"];
-              // Store as ticker_YES or ticker_NO
-              if (outcome == "Yes") {
-                ticker_to_id[cond_id + "_YES"] = token_id;
-              } else if (outcome == "No") {
-                ticker_to_id[cond_id + "_NO"] = token_id;
-              }
+          if (m.contains("clobTokenIds")) {
+            auto tokens_str = m["clobTokenIds"].get<std::string>();
+            auto tokens = nlohmann::json::parse(tokens_str);
+            if (tokens.size() >= 2) {
+              ticker_to_id[slug + "_YES"] = tokens[0].get<std::string>();
+              ticker_to_id[slug + "_NO"] = tokens[1].get<std::string>();
             }
           }
         }
