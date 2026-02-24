@@ -14,7 +14,6 @@ OrderTracker GlobalOrderTracker;
 void ExecutionEngine::run() {
     is_running = true;
     while (is_running) {
-      process_commands();
       GlobalAlgoManager.tick(*this);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -41,21 +40,14 @@ void ExecutionEngine::track_order(const std::string &id, const Order &o) {
 void ExecutionEngine::update_order_status(const std::string &id, OrderStatus status) {
     db.log_status(id, status);
     order_store.update_status(id, status);
-    GlobalAlgoManager.broadcast_execution_event(*this, id, status);
 }
 
 void ExecutionEngine::add_order_fill(const std::string &id, int qty, Price price) {
     db.log_fill(id, qty, price);
     order_store.add_fill(id, qty, price);
-    GlobalAlgoManager.broadcast_execution_event(*this, id, OrderStatus::Filled);
-
     int64_t simulated_loss = (price.raw * qty) / 100;
     current_daily_pnl_raw -= simulated_loss;
-
-    std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ "
-              << price << " (Daily PnL: " << Price(current_daily_pnl_raw.load())
-              << ")" << std::endl;
-
+    std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ " << price << std::endl;
     check_kill_switch();
 }
 
@@ -97,7 +89,6 @@ void LiveExecutionEngine::run() {
             tick_cv.wait_for(lock, std::chrono::milliseconds(100));
         }
         if (!is_running) break;
-        process_commands();
         GlobalAlgoManager.tick(*this);
         check_kill_switch();
     }
@@ -157,15 +148,6 @@ void StreamingMarketBackend::notify_status(const std::string &id, OrderStatus st
 
 // --- Strategies ---
 
-template <typename T>
-bool PersistentConditionalStrategy<T>::tick(ExecutionEngine &engine) {
-    if (co.condition.eval()) {
-        co.order >> engine;
-        return true;
-    }
-    return false;
-}
-
 template class PersistentConditionalStrategy<Condition<PriceTag>>;
 template class PersistentConditionalStrategy<Condition<PositionTag>>;
 template class PersistentConditionalStrategy<Condition<BalanceTag>>;
@@ -183,6 +165,7 @@ void operator>>(const Order &o, ExecutionEngine &engine) {
         GlobalAlgoManager.submit(order_to_dispatch);
         return;
     }
+    // Synchronous execution for now to fix backtest visibility
     engine.execute_order(order_to_dispatch);
 }
 
