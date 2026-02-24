@@ -2,7 +2,7 @@
 
 #include "market_base.hpp"
 #include "websocket.hpp"
-#include "simdjson.h"
+#include <simdjson.h>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -84,30 +84,8 @@ public:
 protected:
   virtual void handle_message(const std::string &msg) = 0;
 
-  void update_price(MarketId market, Price yes, Price no) {
-    {
-      std::lock_guard<std::mutex> lock(cache_mutex_);
-      price_cache_[market.hash] = {yes, no};
-    }
-    if (engine_)
-      engine_->trigger_tick();
-  }
-
-  void update_orderbook(MarketId market, const OrderBook &ob) {
-    std::function<void(const OrderBook &)> cb;
-    {
-      std::lock_guard<std::mutex> lock(cache_mutex_);
-      orderbook_cache_[market.hash] = ob;
-      auto it = callbacks_.find(market.hash);
-      if (it != callbacks_.end()) {
-        cb = it->second;
-      }
-    }
-    if (cb)
-      cb(ob);
-    if (engine_)
-      engine_->trigger_tick();
-  }
+  void update_price(MarketId market, Price yes, Price no);
+  void update_orderbook(MarketId market, const OrderBook &ob);
 
   void notify_fill(const std::string &id, int qty, Price price);
   void notify_status(const std::string &id, OrderStatus status);
