@@ -15,8 +15,16 @@
 
 #include <initializer_list>
 #include <type_traits>
+#include <variant>
+#include <deque>
 
 namespace bop {
+
+struct Command {
+    enum class Type { SubmitOrder, CancelOrder, BatchSubmit };
+    Type type;
+    std::variant<std::monostate, Order, std::string, std::vector<Order>> data;
+};
 
 struct RiskLimits {
   int64_t max_position_size = 10000;
@@ -48,7 +56,38 @@ struct ExecutionEngine {
   Database db;
   std::atomic<int64_t> last_tick_time_ns{0};
 
+  mutable std::mutex cmd_mtx;
+  std::deque<Command> command_queue_;
+
   virtual ~ExecutionEngine() = default;
+
+  void submit_command(Command cmd) {
+    std::lock_guard<std::mutex> lock(cmd_mtx);
+    command_queue_.push_back(std::move(cmd));
+  }
+
+  void process_commands() {
+    std::deque<Command> to_process;
+    {
+        std::lock_guard<std::mutex> lock(cmd_mtx);
+        if (command_queue_.empty()) return;
+        to_process = std::move(command_queue_);
+    }
+
+    for (const auto& cmd : to_process) {
+        if (cmd.type == Command::Type::SubmitOrder) {
+            execute_order(std::get<Order>(cmd.data));
+        } else if (cmd.type == Command::Type::CancelOrder) {
+            execute_cancel(std::get<std::string>(cmd.data));
+        } else if (cmd.type == Command::Type::BatchSubmit) {
+            execute_batch(std::get<std::vector<Order>>(cmd.data));
+        }
+    }
+  }
+
+  virtual void execute_order(const Order &o);
+  virtual void execute_cancel(const std::string &id);
+  virtual void execute_batch(const std::vector<Order> &orders);
 
   void set_sector(const std::string &ticker, const std::string &sector) {
     market_to_sector[ticker] = sector;
