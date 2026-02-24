@@ -144,7 +144,18 @@ struct Polymarket : public StreamingMarketBackend {
     return Price(0);
   }
 
-  std::string get_positions() const override { return "{\"positions\": []}"; }
+  std::string get_positions() const override {
+    std::string path = "/positions?user=" + credentials.address;
+    std::string url = "https://clob.polymarket.com" + path;
+    try {
+      auto resp = Network.get(url, auth_headers("GET", path));
+      if (resp.status_code == 200) {
+        return resp.body;
+      }
+    } catch (...) {
+    }
+    return "{\"positions\": []}";
+  }
 
   // Authentication Helpers
   std::map<std::string, std::string>
