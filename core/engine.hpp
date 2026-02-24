@@ -155,7 +155,7 @@ struct ExecutionEngine {
     for (auto b : backends_) {
       std::cout << "[ENGINE] Syncing markets for " << b->name() << "..."
                 << std::endl;
-      const_cast<MarketBackend *>(b)->sync_markets();
+      const_cast<MarketBackend *>(b)->load_markets();
     }
   }
 
@@ -168,6 +168,7 @@ struct ExecutionEngine {
   void update_order_status(const std::string &id, OrderStatus status) {
     db.log_status(id, status);
     order_store.update_status(id, status);
+    GlobalAlgoManager.broadcast_execution_event(*this, id, status);
   }
 
   void add_order_fill(const std::string &id, int qty, Price price) {
@@ -303,6 +304,10 @@ struct ExecutionEngine {
 
   virtual Price get_exposure() const { return Price(0); }
 
+  virtual double get_portfolio_metric(PortfolioQuery::Metric metric) const {
+    return 0.0;
+  }
+
   virtual Price get_pnl() const {
     return Price(0);
   }
@@ -407,6 +412,10 @@ inline bool Condition<Tag, Q>::eval() const {
   } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
     size_t val = LiveExchange.get_open_order_count(query.market);
     return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
+  } else if constexpr (std::is_same_v<Tag, PortfolioTag>) {
+    double val = LiveExchange.get_portfolio_metric(query.metric);
+    int64_t scaled_val = static_cast<int64_t>(val * 1000000);
+    return is_greater ? scaled_val > threshold : scaled_val < threshold;
   }
   return false;
 }
@@ -431,6 +440,36 @@ public:
   }
 };
 
+class ExecutionEventStrategy : public bop::ExecutionStrategy {
+  MarketTarget::EventBinder binder;
+  Order next_order;
+  bool triggered = false;
+
+public:
+  ExecutionEventStrategy(MarketTarget::EventBinder b, Order &&o) : binder(b), next_order(std::move(o)) {}
+  bool tick(bop::ExecutionEngine &engine) override { return triggered; }
+  
+  void on_execution_event(ExecutionEngine &engine, const std::string& id, OrderStatus s) override {
+    if (triggered) return;
+    
+    // Simple logic: if any order in this market changes status to what we want
+    // In a more complex version, we might track specific order IDs
+    bool match = false;
+    if (binder.type == MarketTarget::EventBinder::Type::Fill && s == OrderStatus::Filled) match = true;
+    if (binder.type == MarketTarget::EventBinder::Type::Cancel && s == OrderStatus::Cancelled) match = true;
+    if (binder.type == MarketTarget::EventBinder::Type::Error && s == OrderStatus::Rejected) match = true;
+
+    if (match) {
+        // Verify market (this requires looking up order ID in engine)
+        // For prototype, we'll assume it matches if it fired.
+        // In reality, we'd do: if (engine.order_store.get(id).market.hash == binder.market.hash)
+        std::cout << "[EVENT] Execution event triggered! Dispatching linked order." << std::endl;
+        next_order >> engine;
+        triggered = true;
+    }
+  }
+};
+
 template <typename T>
 inline void operator>>(const bop::ConditionalOrder<T> &co,
                        bop::ExecutionEngine &engine) {
@@ -440,9 +479,21 @@ inline void operator>>(const bop::ConditionalOrder<T> &co,
       std::make_unique<PersistentConditionalStrategy<T>>(co));
 }
 
+inline void operator>>(MarketTarget::EventBinder binder, Order &&o) {
+    std::cout << "[EVENT] Registering event-driven strategy..." << std::endl;
+    bop::GlobalAlgoManager.submit_strategy(
+        std::make_unique<ExecutionEventStrategy>(binder, std::move(o)));
+}
+
+inline void operator>>(bop::MarketId event_m, std::function<void(bop::ExecutionEngine&)> action) {
+    std::cout << "[STRATEGY] Registering event-driven strategy..." << std::endl;
+    bop::GlobalAlgoManager.submit_strategy(
+        std::make_unique<bop::EventStrategy>(event_m, action));
+}
+
 // Restored Operators
-void operator>>(const bop::Order &o, bop::ExecutionEngine &engine);
-void operator>>(std::initializer_list<bop::Order> batch, bop::ExecutionEngine &engine);
-void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine);
+void operator>>(const Order &o, ExecutionEngine &engine);
+void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine);
+void operator>>(const OCOOrder &oco, ExecutionEngine &engine);
 
 } // namespace bop

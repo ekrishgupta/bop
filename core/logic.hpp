@@ -16,6 +16,8 @@ struct PnLTag {};
 struct SpreadTag {};
 struct DepthTag {};
 struct OpenOrdersTag {};
+struct PortfolioTag {};
+struct TimeTag {};
 
 struct RiskQuery {
   enum class Type { Exposure, PnL };
@@ -31,6 +33,10 @@ template <typename Tag> struct MarketQuery {
 };
 
 struct BalanceQuery {};
+struct PortfolioQuery {
+  enum class Metric { TotalDelta, TotalGamma, TotalTheta, TotalVega, NetExposure, PortfolioValue };
+  Metric metric;
+};
 
 // Forward declaration of composite conditions
 template <typename L, typename R> struct AndCondition;
@@ -80,6 +86,18 @@ struct MarketTarget {
     auto r = resolve();
     return {r.market, false, r.backend};
   }
+
+  // Event Hooks
+  inline MarketId OnTrade() const { return resolve().market; }
+  
+  struct EventBinder {
+    MarketId market;
+    enum class Type { Fill, Cancel, Error } type;
+  };
+
+  inline EventBinder OnFill() const { return {resolve().market, EventBinder::Type::Fill}; }
+  inline EventBinder OnCancel() const { return {resolve().market, EventBinder::Type::Cancel}; }
+  inline EventBinder OnError() const { return {resolve().market, EventBinder::Type::Error}; }
 
   // WebSocket Streaming Entry Points
   inline void
@@ -366,6 +384,53 @@ inline Condition<ExposureTag, RiskQuery> Exposure() {
 
 inline Condition<PnLTag, RiskQuery> PnL() {
   return {{RiskQuery::Type::PnL}, 0, false};
+}
+
+struct PortfolioBinder {
+  PortfolioQuery::Metric metric;
+};
+
+inline PortfolioBinder Portfolio(PortfolioQuery::Metric m) { return {m}; }
+
+struct PortfolioMetricProxy {
+  PortfolioQuery::Metric metric;
+};
+
+struct PortfolioProxy {
+  inline PortfolioMetricProxy TotalDelta() const { return {PortfolioQuery::Metric::TotalDelta}; }
+  inline PortfolioMetricProxy TotalGamma() const { return {PortfolioQuery::Metric::TotalGamma}; }
+  inline PortfolioMetricProxy TotalTheta() const { return {PortfolioQuery::Metric::TotalTheta}; }
+  inline PortfolioMetricProxy TotalVega() const { return {PortfolioQuery::Metric::TotalVega}; }
+  inline PortfolioMetricProxy NetExposure() const { return {PortfolioQuery::Metric::NetExposure}; }
+  inline PortfolioMetricProxy PortfolioValue() const { return {PortfolioQuery::Metric::PortfolioValue}; }
+};
+
+inline PortfolioProxy Portfolio() { return {}; }
+
+struct TimeTrigger {
+  std::chrono::system_clock::time_point trigger_time;
+  inline bool eval() const {
+    return std::chrono::system_clock::now() >= trigger_time;
+  }
+};
+
+inline WhenBinder<TimeTrigger> At(std::chrono::system_clock::time_point t) {
+  return {TimeTrigger{t}};
+}
+
+inline WhenBinder<TimeTrigger> At(const std::string& iso_time) {
+    std::tm tm = {};
+    strptime(iso_time.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+    auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+    return {TimeTrigger{tp}};
+}
+
+inline Condition<PortfolioTag, PortfolioQuery> operator>(PortfolioMetricProxy p, double threshold) {
+  return {{p.metric}, static_cast<int64_t>(threshold * 1000000), true}; // Scaled by 1e6 for precision in int64
+}
+
+inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p, double threshold) {
+  return {{p.metric}, static_cast<int64_t>(threshold * 1000000), false};
 }
 
 // Exposure/PnL comparisons

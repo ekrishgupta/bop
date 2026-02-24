@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 #include <vector>
+#include <functional>
 
 namespace bop {
 
@@ -11,6 +12,21 @@ class ExecutionStrategy {
 public:
   virtual ~ExecutionStrategy() = default;
   virtual bool tick(ExecutionEngine &engine) = 0;
+  virtual void on_market_event(ExecutionEngine &engine, MarketId m, Price p, int64_t q) {}
+  virtual void on_execution_event(ExecutionEngine &engine, const std::string& id, OrderStatus s) {}
+};
+
+class EventStrategy : public ExecutionStrategy {
+    MarketId target_m;
+    std::function<void(ExecutionEngine&)> action;
+public:
+    EventStrategy(MarketId m, std::function<void(ExecutionEngine&)> a) : target_m(m), action(a) {}
+    bool tick(ExecutionEngine&) override { return false; } // Persistent
+    void on_market_event(ExecutionEngine &engine, MarketId m, Price, int64_t) override {
+        if (m.hash == target_m.hash) {
+            action(engine);
+        }
+    }
 };
 
 class AlgoManager {
@@ -44,10 +60,8 @@ public:
   }
 
   void tick(ExecutionEngine &engine) {
-    std::cout << "[ALGO] Ticking manager..." << std::endl;
     std::lock_guard<std::mutex> lock(mtx);
     
-    // 1. Move pending to active
     if (!pending_algos.empty()) {
       for (auto &a : pending_algos)
         active_algos.push_back(std::move(a));
@@ -59,7 +73,6 @@ public:
       pending_strategies.clear();
     }
 
-    // 2. Tick Algos
     for (auto it = active_algos.begin(); it != active_algos.end();) {
       try {
         if ((*it)->tick(engine)) {
@@ -67,13 +80,11 @@ public:
         } else {
           ++it;
         }
-      } catch (const std::exception &e) {
-        std::cerr << "[ALGO] Error ticking algorithm: " << e.what() << std::endl;
+      } catch (...) {
         it = active_algos.erase(it);
       }
     }
 
-    // 3. Tick Strategies
     for (auto it = active_strategies.begin(); it != active_strategies.end();) {
       try {
         if ((*it)->tick(engine)) {
@@ -81,9 +92,7 @@ public:
         } else {
           ++it;
         }
-      } catch (const std::exception &e) {
-        std::cerr << "[STRATEGY] Error ticking strategy: " << e.what()
-                  << std::endl;
+      } catch (...) {
         it = active_strategies.erase(it);
       }
     }
@@ -92,6 +101,16 @@ public:
   size_t active_count() {
     std::lock_guard<std::mutex> lock(mtx);
     return active_algos.size() + active_strategies.size();
+  }
+
+  void broadcast_market_event(ExecutionEngine &engine, MarketId m, Price p, int64_t q) {
+      std::lock_guard<std::mutex> lock(mtx);
+      for (auto& s : active_strategies) s->on_market_event(engine, m, p, q);
+  }
+
+  void broadcast_execution_event(ExecutionEngine &engine, const std::string& id, OrderStatus s) {
+      std::lock_guard<std::mutex> lock(mtx);
+      for (auto& strat : active_strategies) strat->on_execution_event(engine, id, s);
   }
 };
 
