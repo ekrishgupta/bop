@@ -355,9 +355,29 @@ int main() {
 
   std::cout << "--- BOP Production Strategy Engine ---" << std::endl;
 
-  // 1. Initialize Credentials and Backends
-  kalshi.set_credentials({"my_api_key", "my_secret_key", "my_passphrase", ""});
-  polymarket.set_credentials({"", "0x_my_private_key", "", "0x_my_address"});
+  // 1. Initialize Credentials and Backends from Environment Variables
+  const char* k_key = std::getenv("KALSHI_API_KEY");
+  const char* k_sec = std::getenv("KALSHI_SECRET_KEY");
+  const char* k_pas = std::getenv("KALSHI_PASSPHRASE");
+  
+  kalshi.set_credentials({
+    k_key ? k_key : "",
+    k_sec ? k_sec : "",
+    k_pas ? k_pas : "",
+    ""
+  });
+
+  const char* p_key = std::getenv("POLY_API_KEY");
+  const char* p_sec = std::getenv("POLY_PRIVATE_KEY");
+  const char* p_pas = std::getenv("POLY_PASSPHRASE");
+  const char* p_adr = std::getenv("POLY_ADDRESS");
+
+  polymarket.set_credentials({
+    p_key ? p_key : "",
+    p_sec ? p_sec : "",
+    p_pas ? p_pas : "",
+    p_adr ? p_adr : ""
+  });
 
   // 2. Register backends with the Execution Engine
   RealLiveExchange.register_backend(&kalshi);
