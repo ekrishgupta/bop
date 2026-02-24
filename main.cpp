@@ -14,6 +14,11 @@ struct MockEngine : public ExecutionEngine {
   Price get_depth(MarketId, bool) const override {
     return Price::from_cents(50);
   }
+  int64_t get_volume(MarketId) const override {
+    static int64_t vol = 1000;
+    vol += 500; // Increase volume to simulate trades
+    return vol;
+  }
 };
 
 MockEngine RealLiveExchange;
@@ -327,16 +332,13 @@ void algo_logic_demo() {
       Buy(200_shares) / Market("ETH", kalshi) / YES + Peg(Bid, Price(1_ticks));
   peg_order >> LiveExchange;
 
-  std::cout << "Algo Manager now tracking " << GlobalAlgoManager.active_count()
-            << " algorithms." << std::endl;
+  // 4. VWAP / Participation Demo (10% participation)
+  auto vwap_order =
+      Buy(500_shares) / Market("BTC", polymarket) / YES | VWAP(0.1);
+  vwap_order >> LiveExchange;
 
-  // Simulate market ticks for 10 seconds (20 * 500ms)
-  for (int i = 0; i < 20; ++i) {
-    std::cout << "--- Tick " << i << " (Time: " << i * 0.5 << "s) ---"
-              << std::endl;
-    GlobalAlgoManager.tick(LiveExchange);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  }
+  std::cout << "Algo Manager now tracking " << GlobalAlgoManager.active_count()
+            << " algorithms. Handing over to Execution Engine." << std::endl;
 }
 
 void streaming_demo() {
@@ -369,5 +371,21 @@ int main() {
   auth_demo();
   algo_logic_demo();
   streaming_demo();
+
+  std::cout << "\n[MAIN] Starting Global Execution Engine for 5 seconds..." << std::endl;
+  
+  // Start a thread to stop the engine after 5 seconds for demonstration purposes
+  std::thread stopper([]() {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::cout << "\n[MAIN] Stopping engine..." << std::endl;
+    LiveExchange.stop();
+  });
+
+  LiveExchange.run();
+  
+  if (stopper.joinable()) {
+    stopper.join();
+  }
+
   return 0;
 }
