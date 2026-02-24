@@ -86,6 +86,7 @@ protected:
 
   void update_price(MarketId market, Price yes, Price no);
   void update_orderbook(MarketId market, const OrderBook &ob);
+  void update_orderbook_incremental(MarketId market, bool is_bid, const OrderBookLevel &level);
 
   void notify_fill(const std::string &id, int qty, Price price);
   void notify_status(const std::string &id, OrderStatus status);

@@ -15,7 +15,6 @@ void ExecutionEngine::run() {
     is_running = true;
     std::cout << "[ENGINE] Starting default responsive event loop..." << std::endl;
     while (is_running) {
-      last_tick_time_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
       GlobalAlgoManager.tick(*this);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -73,7 +72,6 @@ void LiveExecutionEngine::run() {
 
       if (!is_running) break;
 
-      last_tick_time_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
       GlobalAlgoManager.tick(*this);
       check_kill_switch();
     }
@@ -156,13 +154,66 @@ void StreamingMarketBackend::update_orderbook(MarketId market, const OrderBook &
       engine_->trigger_tick();
 }
 
+void StreamingMarketBackend::update_orderbook_incremental(MarketId market, bool is_bid, const OrderBookLevel &level) {
+    std::function<void(const OrderBook &)> cb;
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      auto &ob = orderbook_cache_[market.hash];
+      auto &side = is_bid ? ob.bids : ob.asks;
+
+      // Find by order_id or price
+      bool found = false;
+      for (auto &existing : side) {
+          if (!level.order_id.empty() && existing.order_id == level.order_id) {
+              if (level.quantity <= 0) {
+                  // Remove
+                  side.erase(std::remove_if(side.begin(), side.end(), [&](const auto& l){ return l.order_id == level.order_id; }), side.end());
+              } else {
+                  existing.quantity = level.quantity;
+                  existing.price = level.price;
+              }
+              found = true;
+              break;
+          } else if (existing.price == level.price) {
+              if (level.quantity <= 0) {
+                  side.erase(std::remove_if(side.begin(), side.end(), [&](const auto& l){ return l.price == level.price; }), side.end());
+              } else {
+                  existing.quantity = level.quantity;
+              }
+              found = true;
+              break;
+          }
+      }
+
+      if (!found && level.quantity > 0) {
+          side.push_back(level);
+          // Re-sort
+          if (is_bid) {
+              std::sort(side.begin(), side.end(), [](const auto& a, const auto& b){ return a.price > b.price; });
+          } else {
+              std::sort(side.begin(), side.end(), [](const auto& a, const auto& b){ return a.price < b.price; });
+          }
+      }
+
+      auto it = callbacks_.find(market.hash);
+      if (it != callbacks_.end()) {
+        cb = it->second;
+      }
+      
+      if (cb) cb(ob);
+    }
+    
+    if (engine_)
+      engine_->trigger_tick();
+}
+
 void StreamingMarketBackend::notify_fill(const std::string &id, int qty, Price price) {
     if (engine_) {
         engine_->add_order_fill(id, qty, price);
     }
 }
 
-void LiveExecutionEngine::notify_status(const std::string &id, OrderStatus status) {
+void StreamingMarketBackend::notify_status(const std::string &id, OrderStatus status) {
     if (engine_) {
         engine_->update_order_status(id, status);
     }
@@ -170,8 +221,8 @@ void LiveExecutionEngine::notify_status(const std::string &id, OrderStatus statu
 
 // --- Dispatch Operators ---
 
-void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
-  bop::Order order_to_dispatch = o;
+void operator>>(const Order &o, ExecutionEngine &engine) {
+  Order order_to_dispatch = o;
 
   if (engine.limits.dynamic_sizing_enabled) {
       order_to_dispatch.quantity = engine.calculate_dynamic_size(o);
@@ -186,10 +237,10 @@ void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
     return;
   }
 
-  if (order_to_dispatch.algo_type != bop::AlgoType::None) {
+  if (order_to_dispatch.algo_type != AlgoType::None) {
     std::cout << "[ALGO] Registering " << (int)order_to_dispatch.algo_type << " for "
               << order_to_dispatch.market.ticker << std::endl;
-    bop::GlobalAlgoManager.submit(order_to_dispatch);
+    GlobalAlgoManager.submit(order_to_dispatch);
     return;
   }
 
@@ -221,12 +272,11 @@ void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
   }
 }
 
-void operator>>(std::initializer_list<bop::Order> batch,
-                       bop::ExecutionEngine &engine) {
+void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine) {
   if (batch.size() == 0)
     return;
 
-  const bop::MarketBackend *common_backend = batch.begin()->backend;
+  const MarketBackend *common_backend = batch.begin()->backend;
   bool all_same = true;
   for (const auto &o : batch) {
     if (o.backend != common_backend) {
@@ -238,7 +288,7 @@ void operator>>(std::initializer_list<bop::Order> batch,
   if (all_same && common_backend) {
     std::cout << "[BATCH] Dispatching " << batch.size() << " orders to "
               << common_backend->name() << std::endl;
-    std::vector<bop::Order> orders(batch);
+    std::vector<Order> orders(batch);
     common_backend->create_batch_orders(orders);
   } else {
     std::cout << "[BATCH] Heterogeneous batch. Dispatching individually..."
@@ -249,7 +299,7 @@ void operator>>(std::initializer_list<bop::Order> batch,
   }
 }
 
-void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
+void operator>>(const OCOOrder &oco, ExecutionEngine &engine) {
   std::cout << "[OCO] Dispatching OCO pair..." << std::endl;
   oco.order1 >> engine;
   oco.order2 >> engine;

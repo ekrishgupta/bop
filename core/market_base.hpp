@@ -14,11 +14,13 @@ namespace bop {
 struct OrderBookLevel {
   Price price;
   int64_t quantity;
+  std::string order_id; // For L3/Incremental updates
 };
 
 struct OrderBook {
   std::vector<OrderBookLevel> bids;
   std::vector<OrderBookLevel> asks;
+  int64_t last_update_id = 0; // Sequence number for incremental updates
 };
 
 struct Candlestick {
