@@ -39,6 +39,7 @@ endif()
 add_library(bop_core
     core/impl.cpp
     core/algo.cpp
+    core/database.cpp
 )
 target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::boost simdjson::simdjson SQLite::SQLite3)
 
