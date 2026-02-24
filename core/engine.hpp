@@ -24,6 +24,16 @@ struct RiskLimits {
   Price max_sector_exposure = Price::from_usd(15000);
   double fat_finger_threshold = 0.10; // 10% deviation from BBO
   Price daily_loss_limit = Price::from_usd(1000);
+
+  // Portfolio-level metrics
+  double max_leverage = 3.0;
+  double max_drawdown_percent = 0.10; // 10% from peak
+  double max_correlation_threshold = 0.85;
+
+  // Dynamic Position Sizing
+  bool dynamic_sizing_enabled = false;
+  double risk_per_trade_percent = 0.02; // Risk 2% of equity per trade
+  int64_t min_order_quantity = 1;
 };
 
 struct ExecutionEngine {
@@ -33,6 +43,7 @@ struct ExecutionEngine {
   RiskLimits limits;
   std::atomic<int64_t> current_daily_pnl_raw{0};
   std::unordered_map<std::string, std::string> market_to_sector;
+  std::unordered_map<uint32_t, std::unordered_map<uint32_t, double>> correlations;
   mutable std::mutex risk_mtx;
   Database db;
 
@@ -40,6 +51,51 @@ struct ExecutionEngine {
 
   void set_sector(const std::string &ticker, const std::string &sector) {
     market_to_sector[ticker] = sector;
+  }
+
+  void set_correlation(const std::string &m1, const std::string &m2, double val) {
+    uint32_t h1 = fnv1a(m1.c_str());
+    uint32_t h2 = fnv1a(m2.c_str());
+    correlations[h1][h2] = val;
+    correlations[h2][h1] = val;
+  }
+
+  bool check_correlation_risk(const Order &o) const {
+    uint32_t target_hash = o.market.hash;
+    auto it = correlations.find(target_hash);
+    if (it == correlations.end()) return true;
+
+    for (auto const& [other_hash, corr] : it->second) {
+      if (std::abs(corr) > limits.max_correlation_threshold) {
+        int64_t other_pos = get_position(MarketId(other_hash));
+        if (other_pos != 0) {
+            bool same_dir = (corr > 0 && ((o.is_buy && other_pos > 0) || (!o.is_buy && other_pos < 0))) ||
+                           (corr < 0 && ((o.is_buy && other_pos < 0) || (!o.is_buy && other_pos > 0)));
+            if (same_dir) {
+                std::cerr << "[RISK] REJECT: High correlation (" << corr 
+                          << ") with existing position in market hash " << other_hash << std::endl;
+                return false;
+            }
+        }
+      }
+    }
+    return true;
+  }
+
+  int64_t calculate_dynamic_size(const Order &o) const {
+    if (!limits.dynamic_sizing_enabled) return o.quantity;
+
+    Price equity = get_balance();
+    if (equity.raw <= 0) return limits.min_order_quantity;
+
+    double risk_amount = equity.to_double() * limits.risk_per_trade_percent;
+    Price p = (o.price.raw > 0) ? o.price : get_price(o.market, o.outcome_yes);
+    if (p.raw == 0) p = Price::from_usd(0.5);
+
+    int64_t size = static_cast<int64_t>(risk_amount / p.to_double());
+    if (size > limits.max_position_size) size = limits.max_position_size;
+    if (size < limits.min_order_quantity) size = limits.min_order_quantity;
+    return size;
   }
 
   std::string get_sector(const std::string &ticker) const {
@@ -105,6 +161,20 @@ struct ExecutionEngine {
                 << Price(current_daily_pnl_raw.load()) << std::endl;
       return false;
     }
+
+    // 0.1 Leverage Check
+    Price balance = get_balance();
+    if (balance.raw > 0) {
+        Price exposure = get_exposure();
+        double leverage = exposure.to_double() / balance.to_double();
+        if (leverage > limits.max_leverage) {
+            std::cerr << "[RISK] REJECT: Portfolio leverage too high: " << leverage << std::endl;
+            return false;
+        }
+    }
+
+    // 0.2 Correlation Check
+    if (!check_correlation_risk(o)) return false;
 
     // 1. Max Position Size
     int64_t current_pos = get_position(o.market);
@@ -398,42 +468,48 @@ extern bop::ExecutionEngine &LiveExchange;
 
 // Final Dispatch Operators
 inline void operator>>(const bop::Order &o, bop::ExecutionEngine &engine) {
+  bop::Order order_to_dispatch = o;
+
+  if (engine.limits.dynamic_sizing_enabled) {
+      order_to_dispatch.quantity = engine.calculate_dynamic_size(o);
+  }
+
   uint64_t now =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  uint64_t latency = now - o.creation_timestamp_ns;
+  uint64_t latency = now - order_to_dispatch.creation_timestamp_ns;
 
-  if (!engine.check_risk(o)) {
+  if (!engine.check_risk(order_to_dispatch)) {
     std::cout << "[ENGINE] Order rejected by risk engine." << std::endl;
     return;
   }
 
-  if (o.algo_type != bop::AlgoType::None) {
-    std::cout << "[ALGO] Registering " << (int)o.algo_type << " for "
-              << o.market.ticker << std::endl;
-    bop::GlobalAlgoManager.submit(o);
+  if (order_to_dispatch.algo_type != bop::AlgoType::None) {
+    std::cout << "[ALGO] Registering " << (int)order_to_dispatch.algo_type << " for "
+              << order_to_dispatch.market.ticker << std::endl;
+    bop::GlobalAlgoManager.submit(order_to_dispatch);
     return;
   }
 
-  if (o.backend) {
+  if (order_to_dispatch.backend) {
     std::string id;
-    if (o.is_spread) {
-      std::cout << "[BACKEND] Dispatching spread order (" << o.market.hash
-                << " - " << o.market2.hash << ") to " << o.backend->name()
+    if (order_to_dispatch.is_spread) {
+      std::cout << "[BACKEND] Dispatching spread order (" << order_to_dispatch.market.hash
+                << " - " << order_to_dispatch.market2.hash << ") to " << order_to_dispatch.backend->name()
                 << " (" << latency << " ns latency)" << std::endl;
-      id = o.backend->create_order(o);
+      id = order_to_dispatch.backend->create_order(order_to_dispatch);
     } else {
-      std::cout << "[BACKEND] Dispatching to " << o.backend->name() << " ("
+      std::cout << "[BACKEND] Dispatching to " << order_to_dispatch.backend->name() << " ("
                 << latency << " ns latency)" << std::endl;
-      id = o.backend->create_order(o);
+      id = order_to_dispatch.backend->create_order(order_to_dispatch);
     }
     
     if (!id.empty() && id != "error") {
-      engine.track_order(id, o);
+      engine.track_order(id, order_to_dispatch);
     }
   } else {
-    if (o.is_spread) {
+    if (order_to_dispatch.is_spread) {
       std::cout << "[ENGINE] No backend bound for spread order ("
-                << o.market.hash << " - " << o.market2.hash
+                << order_to_dispatch.market.hash << " - " << order_to_dispatch.market2.hash
                 << "). Simulated latency: " << latency << " ns." << std::endl;
     } else {
       std::cout << "[ENGINE] No backend bound. Simulated latency: " << latency
@@ -523,12 +599,12 @@ inline bool Condition<Tag, Q>::eval() const {
 } // namespace bop
 
 template <typename T>
-class PersistentConditionalStrategy : public ExecutionStrategy {
-  ConditionalOrder<T> co;
+class PersistentConditionalStrategy : public bop::ExecutionStrategy {
+  bop::ConditionalOrder<T> co;
 
 public:
-  PersistentConditionalStrategy(const ConditionalOrder<T> &order) : co(order) {}
-  bool tick(ExecutionEngine &engine) override {
+  PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order) : co(order) {}
+  bool tick(bop::ExecutionEngine &engine) override {
     if (co.condition.eval()) {
       std::cout << "[STRATEGY] Condition met! Triggering order..." << std::endl;
       co.order >> engine;
@@ -538,13 +614,15 @@ public:
   }
 };
 
+namespace bop {
+
 template <typename T>
 inline void operator>>(const bop::ConditionalOrder<T> &co,
                        bop::ExecutionEngine &engine) {
   std::cout << "[STRATEGY] Registering persistent conditional order..."
             << std::endl;
   bop::GlobalAlgoManager.submit_strategy(
-      std::make_unique<bop::PersistentConditionalStrategy<T>>(co));
+      std::make_unique<PersistentConditionalStrategy<T>>(co));
 }
 
 inline void operator>>(const bop::OCOOrder &oco, bop::ExecutionEngine &engine) {
