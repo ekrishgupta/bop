@@ -1,6 +1,6 @@
 # Contributing to BOP
 
-Thank you for your interest in contributing to the Best Order Protocol (BOP)! We welcome contributions from the community to help make BOP the best algorithmic trading framework for prediction markets.
+Thank you for your interest in contributing to the Binary Outcome Protocol (BOP)! We welcome contributions from the community to help make BOP the best algorithmic trading framework for prediction markets.
 
 ## How to Contribute
 

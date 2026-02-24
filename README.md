@@ -1,4 +1,4 @@
-# BOP: Best Order Protocol
+# BOP: Binary Outcome Protocol
 
 BOP is a high-performance C++17 algorithmic trading framework specifically designed for **prediction markets** (e.g., Kalshi, Polymarket, PredictIt). 
 
