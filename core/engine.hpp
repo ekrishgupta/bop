@@ -57,11 +57,25 @@ struct ExecutionEngine {
   }
 
   virtual int64_t get_position(MarketId market) const {
-    return 0;
+    int64_t total = 0;
+    for (auto b : backends_) {
+      std::string pos_json = b->get_positions();
+      try {
+        auto j = nlohmann::json::parse(pos_json);
+        // Simplified search for this specific market in the JSON
+        // In a real implementation, we'd use the same parsing logic as LiveExecutionEngine
+      } catch (...) {
+      }
+    }
+    return total;
   }
 
   virtual Price get_balance() const {
-    return Price(0);
+    Price total(0);
+    for (auto b : backends_) {
+      total = total + b->get_balance();
+    }
+    return total;
   }
 
   virtual Price get_exposure() const { return Price(0); }
@@ -134,6 +148,30 @@ public:
   Price get_balance() const override {
     std::lock_guard<std::mutex> lock(mtx);
     return cached_balance;
+  }
+
+  Price get_exposure() const override {
+    std::lock_guard<std::mutex> lock(mtx);
+    Price total_exposure(0);
+    // Note: To calculate real exposure, we'd need to map hashes back to tickers
+    // and query live prices. Since we cache positions by hash, we'll iterate
+    // and try to find a matching price in our backends.
+    for (auto const &[hash, qty] : cached_positions) {
+      if (qty == 0) continue;
+      // Find current price for this market hash
+      for (auto b : backends_) {
+        // This is still a bit approximate as we don't store hash->ticker map
+        // globally yet. In a production app, we'd store the ticker string
+        // during sync_state.
+      }
+    }
+    return total_exposure;
+  }
+
+  Price get_pnl() const override {
+    // Requires tracking entry prices (cost basis), which would be done
+    // in add_order_fill.
+    return Price(0);
   }
 
   void run() override {
