@@ -5,7 +5,9 @@
 #include <boost/asio/ssl/context.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
+#include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 #include <atomic>
@@ -56,8 +58,8 @@ class LiveWebSocketClient : public WebSocketClient {
 public:
   LiveWebSocketClient()
       : work_guard_(net::make_work_guard(ioc_)),
-        resolver_(net::make_strand(ioc_)),
-        ws_(net::make_strand(ioc_), ctx_) {
+        resolver_(ioc_.get_executor()),
+        ws_(ioc_.get_executor(), ctx_) {
     // Configure SSL context
     ctx_.set_default_verify_paths();
     ctx_.set_verify_mode(ssl::verify_none); // In production, use ssl::verify_peer
@@ -241,7 +243,7 @@ private:
   net::executor_work_guard<net::io_context::executor_type> work_guard_;
   ssl::context ctx_{ssl::context::tlsv12_client};
   tcp::resolver resolver_;
-  websocket::stream<beast::ssl_stream<beast::tcp_stream>> ws_;
+  websocket::stream<ssl::stream<beast::tcp_stream>> ws_;
   beast::flat_buffer buffer_;
   std::string host_;
   std::string path_;
