@@ -1,8 +1,8 @@
 # BOP: Binary Outcome Protocol
 
-BOP is a high-performance C++17 algorithmic trading framework specifically designed for **prediction markets** (e.g., Kalshi, Polymarket, PredictIt). 
+BOP is an embedded **Domain-Specific Language (DSL)** for prediction markets built on the **Binary Outcome Protocol**, natively integrated into C++17.
 
-Unlike traditional trading libraries that rely on verbose API calls, BOP introduces a **Fluent Domain-Specific Language (DSL)** that allows quantitative traders to express complex market logic, execution algorithms, and risk gates using intuitive C++ operator overloading.
+Unlike traditional trading libraries that rely on verbose API calls, BOP allows quantitative traders to express complex market logic, execution algorithms, and risk gates as readable C++ expressions. By treating binary outcomes (YES/NO) as first-class primitives, the language transforms standard code into an intuitive, pipeline-based strategy language.
 
 ## The BOP Language
 
