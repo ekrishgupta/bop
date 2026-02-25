@@ -3,8 +3,10 @@
 #include "nlohmann/json.hpp"
 #include <curl/curl.h>
 #include <map>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace bop {
 
@@ -14,7 +16,12 @@ class HttpClient {
 public:
   HttpClient() { curl_global_init(CURL_GLOBAL_DEFAULT); }
 
-  ~HttpClient() { curl_global_cleanup(); }
+  ~HttpClient() {
+    for (CURL *handle : curl_pool_) {
+      curl_easy_cleanup(handle);
+    }
+    curl_global_cleanup();
+  }
 
   struct Response {
     long status_code;
@@ -33,6 +40,28 @@ public:
   }
 
 private:
+  std::vector<CURL *> curl_pool_;
+  std::mutex pool_mutex_;
+
+  CURL *acquire_handle() {
+    std::lock_guard<std::mutex> lock(pool_mutex_);
+    if (!curl_pool_.empty()) {
+      CURL *handle = curl_pool_.back();
+      curl_pool_.pop_back();
+      curl_easy_reset(handle);
+      return handle;
+    }
+    CURL *handle = curl_easy_init();
+    if (!handle)
+      throw std::runtime_error("Failed to initialize CURL");
+    return handle;
+  }
+
+  void release_handle(CURL *handle) {
+    std::lock_guard<std::mutex> lock(pool_mutex_);
+    curl_pool_.push_back(handle);
+  }
+
   static size_t WriteCallback(void *contents, size_t size, size_t nmemb,
                               void *userp) {
     ((std::string *)userp)->append((char *)contents, size * nmemb);
@@ -42,9 +71,7 @@ private:
   Response request(const std::string &url, const std::string &method,
                    const std::string &payload,
                    const std::map<std::string, std::string> &headers) {
-    CURL *curl = curl_easy_init();
-    if (!curl)
-      throw std::runtime_error("Failed to initialize CURL");
+    CURL *curl = acquire_handle();
 
     std::string readBuffer;
     struct curl_slist *chunk = nullptr;
@@ -72,12 +99,12 @@ private:
     if (res != CURLE_OK) {
       std::string err = curl_easy_strerror(res);
       curl_slist_free_all(chunk);
-      curl_easy_cleanup(curl);
+      release_handle(curl);
       throw std::runtime_error("CURL request failed: " + err);
     }
 
     curl_slist_free_all(chunk);
-    curl_easy_cleanup(curl);
+    release_handle(curl);
 
     return {response_code, readBuffer};
   }
