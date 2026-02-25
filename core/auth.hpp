@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <iomanip>
 #include <openssl/bio.h>
@@ -160,6 +161,34 @@ static void keccakf(uint64_t state[25]) {
   }
 }
 
+// Array-based hash function to eliminate std::string allocations
+inline std::array<uint8_t, 32> hash_array(const uint8_t *data, size_t len) {
+  uint64_t state[25] = {0};
+  size_t rate = 136;
+  size_t pos = 0;
+
+  for (size_t i = 0; i < len; ++i) {
+    state[pos / 8] ^= static_cast<uint64_t>(data[i]) << (8 * (pos % 8));
+    pos++;
+    if (pos == rate) {
+      keccakf(state);
+      pos = 0;
+    }
+  }
+
+  state[pos / 8] ^= 0x01ULL << (8 * (pos % 8));
+  state[(rate - 1) / 8] ^= 0x80ULL << (8 * ((rate - 1) % 8));
+  keccakf(state);
+
+  std::array<uint8_t, 32> res;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 8; ++j) {
+      res[i * 8 + j] = static_cast<uint8_t>((state[i] >> (8 * j)) & 0xFF);
+    }
+  }
+  return res;
+}
+
 inline std::string hash(const std::string &data) {
   uint64_t state[25] = {0};
   size_t rate = 136;
@@ -203,40 +232,46 @@ struct KalshiSigner {
 
 namespace eth {
 
-inline std::string address_from_pubkey(const EC_POINT *pub_point, const EC_GROUP *group) {
-    unsigned char *pub_bin = nullptr;
-    size_t pub_len = EC_POINT_point2buf(group, pub_point, POINT_CONVERSION_UNCOMPRESSED, &pub_bin, nullptr);
-    if (pub_len == 0) return "";
-    
-    // Skip the 0x04 prefix byte
-    std::string pub_data(reinterpret_cast<char*>(pub_bin + 1), pub_len - 1);
-    OPENSSL_free(pub_bin);
-    
-    std::string k_hash = keccak::hash(pub_data);
-    // Address is the last 20 bytes of the Keccak-256 hash
-    return "0x" + to_hex(reinterpret_cast<const unsigned char*>(k_hash.c_str() + 12), 20);
+inline std::string address_from_pubkey(const EC_POINT *pub_point,
+                                       const EC_GROUP *group) {
+  unsigned char *pub_bin = nullptr;
+  size_t pub_len = EC_POINT_point2buf(
+      group, pub_point, POINT_CONVERSION_UNCOMPRESSED, &pub_bin, nullptr);
+  if (pub_len == 0)
+    return "";
+
+  // Skip the 0x04 prefix byte
+  std::string pub_data(reinterpret_cast<char *>(pub_bin + 1), pub_len - 1);
+  OPENSSL_free(pub_bin);
+
+  std::string k_hash = keccak::hash(pub_data);
+  // Address is the last 20 bytes of the Keccak-256 hash
+  return "0x" +
+         to_hex(reinterpret_cast<const unsigned char *>(k_hash.c_str() + 12),
+                20);
 }
 
-inline int recover_v(const std::string &hash_bytes, const BIGNUM *r, const BIGNUM *s, const std::string &expected_addr) {
-    EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
-    const EC_GROUP *group = EC_KEY_get0_group(key);
-    BIGNUM *order = BN_new();
-    EC_GROUP_get_order(group, order, nullptr);
+inline int recover_v(const std::string &hash_bytes, const BIGNUM *r,
+                     const BIGNUM *s, const std::string &expected_addr) {
+  EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+  const EC_GROUP *group = EC_KEY_get0_group(key);
+  BIGNUM *order = BN_new();
+  EC_GROUP_get_order(group, order, nullptr);
 
-    for (int v = 27; v <= 28; ++v) {
-        int recid = v - 27;
-        
-        // This is a simplified recovery logic for secp256k1
-        // In a real production system, one would use libsecp256k1 or a more 
-        // comprehensive OpenSSL-based recovery. For bop, we will try to match the address.
-        // Given OpenSSL doesn't have a simple 'recover' function, 
-        // many implementations use a pre-computed V or external library.
-        // We'll use 27 as a default but allow for 28 if we were to implement full recovery.
-    }
-    
-    BN_free(order);
-    EC_KEY_free(key);
-    return 27; 
+  for (int v = 27; v <= 28; ++v) {
+    int recid = v - 27;
+
+    // This is a simplified recovery logic for secp256k1
+    // In a real production system, one would use libsecp256k1 or a more
+    // comprehensive OpenSSL-based recovery. For bop, we will try to match the
+    // address. Given OpenSSL doesn't have a simple 'recover' function, many
+    // implementations use a pre-computed V or external library. We'll use 27 as
+    // a default but allow for 28 if we were to implement full recovery.
+  }
+
+  BN_free(order);
+  EC_KEY_free(key);
+  return 27;
 }
 
 inline std::string sign_hash(const std::string &private_key_hex,
@@ -252,9 +287,9 @@ inline std::string sign_hash(const std::string &private_key_hex,
                nullptr);
   EC_KEY_set_public_key(key, pub_point);
 
-  ECDSA_SIG *sig = ECDSA_do_sign(
-      reinterpret_cast<const unsigned char *>(hash_bytes.c_str()),
-      hash_bytes.size(), key);
+  ECDSA_SIG *sig =
+      ECDSA_do_sign(reinterpret_cast<const unsigned char *>(hash_bytes.c_str()),
+                    hash_bytes.size(), key);
 
   const BIGNUM *r_bn, *s_bn;
   ECDSA_SIG_get0(sig, &r_bn, &s_bn);
@@ -271,15 +306,15 @@ inline std::string sign_hash(const std::string &private_key_hex,
   }
 
   // Placeholder for V calculation - usually requires testing recovery
-  int v = 27; 
-  
+  int v = 27;
+
   unsigned char r_bin[32], s_bin[32];
   BN_bn2binpad(r_bn, r_bin, 32);
   BN_bn2binpad(s_bn, s_bin, 32);
   unsigned char v_byte = static_cast<unsigned char>(v);
 
-  std::string signature = "0x" + to_hex(r_bin, 32) + to_hex(s_bin, 32) +
-                          to_hex(&v_byte, 1);
+  std::string signature =
+      "0x" + to_hex(r_bin, 32) + to_hex(s_bin, 32) + to_hex(&v_byte, 1);
 
   ECDSA_SIG_free(sig);
   EC_KEY_free(key);
@@ -301,8 +336,8 @@ struct PolySigner {
                           const std::string &method, const std::string &path,
                           const std::string &body = "") {
     // 1. EIP-712 Domain Separator
-    std::string typeHash_Domain =
-        keccak::hash("EIP712Domain(string name,string version,uint256 chainId)");
+    std::string typeHash_Domain = keccak::hash(
+        "EIP712Domain(string name,string version,uint256 chainId)");
     std::string nameHash = keccak::hash("ClobApi");
     std::string versionHash = keccak::hash("1");
     std::string chainId = encode_uint256(137);
@@ -310,8 +345,9 @@ struct PolySigner {
         keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
 
     // 2. Struct Hash
-    std::string typeHash_ClobAuth = keccak::hash(
-        "ClobAuth(address address,string timestamp,string method,string path,string body)");
+    std::string typeHash_ClobAuth =
+        keccak::hash("ClobAuth(address address,string timestamp,string "
+                     "method,string path,string body)");
     std::string addrEncoded = encode_address(address_hex);
     std::string tsHash = keccak::hash(timestamp);
     std::string mHash = keccak::hash(method);
@@ -328,16 +364,14 @@ struct PolySigner {
     return eth::sign_hash(private_key_hex, finalHash, address_hex);
   }
 
-  static std::string sign_order(const std::string &private_key_hex,
-                                const std::string &address_hex,
-                                const std::string &token_id,
-                                const std::string &price,
-                                const std::string &size, const std::string &side,
-                                const std::string &expiration,
-                                uint64_t nonce) {
+  static std::string
+  sign_order(const std::string &private_key_hex, const std::string &address_hex,
+             const std::string &token_id, const std::string &price,
+             const std::string &size, const std::string &side,
+             const std::string &expiration, uint64_t nonce) {
     // EIP-712 Domain Separator for Polymarket Order
-    std::string typeHash_Domain =
-        keccak::hash("EIP712Domain(string name,string version,uint256 chainId)");
+    std::string typeHash_Domain = keccak::hash(
+        "EIP712Domain(string name,string version,uint256 chainId)");
     std::string nameHash = keccak::hash("ClobOrder");
     std::string versionHash = keccak::hash("1");
     std::string chainId = encode_uint256(137);
@@ -345,14 +379,17 @@ struct PolySigner {
         keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
 
     // Order Struct Hash
-    // keccak256("Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 side,uint256 expiration,uint256 nonce)")
+    // keccak256("Order(address owner,uint256 token_id,uint256 price,uint256
+    // size,uint8 side,uint256 expiration,uint256 nonce)")
     std::string typeHash_Order = keccak::hash(
-        "Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 side,uint256 expiration,uint256 nonce)");
+        "Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 "
+        "side,uint256 expiration,uint256 nonce)");
 
     std::string ownerEncoded = encode_address(address_hex);
     // Polymarket token_id, price, size are uint256 in the struct
     // We assume they are passed as strings representing the decimal value
-    // For simplicity, we'll use a helper to convert decimal string to 32-byte BE
+    // For simplicity, we'll use a helper to convert decimal string to 32-byte
+    // BE
     auto dec_to_bin = [](std::string s) {
       BIGNUM *bn = nullptr;
       BN_dec2bn(&bn, s.c_str());
@@ -370,10 +407,9 @@ struct PolySigner {
     std::string expEncoded = dec_to_bin(expiration);
     std::string nonceEncoded = encode_uint256(nonce);
 
-    std::string structHash =
-        keccak::hash(typeHash_Order + ownerEncoded + tokenEncoded +
-                     priceEncoded + sizeEncoded + sideEncoded + expEncoded +
-                     nonceEncoded);
+    std::string structHash = keccak::hash(
+        typeHash_Order + ownerEncoded + tokenEncoded + priceEncoded +
+        sizeEncoded + sideEncoded + expEncoded + nonceEncoded);
 
     std::string finalHash =
         keccak::hash("\x19\x01" + domainSeparator + structHash);
