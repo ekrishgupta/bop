@@ -295,9 +295,9 @@ inline int recover_v(const std::string &hash_bytes, const BIGNUM *r,
   return 27;
 }
 
-inline std::string sign_hash(const std::string &private_key_hex,
-                             const std::string &hash_bytes,
-                             const std::string &expected_addr = "") {
+inline std::string sign_hash_array(const std::string &private_key_hex,
+                                   const std::array<uint8_t, 32> &hash_bytes,
+                                   const std::string &expected_addr = "") {
   auto priv_bytes = from_hex(private_key_hex);
   BIGNUM *priv_bn = BN_bin2bn(priv_bytes.data(), priv_bytes.size(), nullptr);
   EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
@@ -308,9 +308,7 @@ inline std::string sign_hash(const std::string &private_key_hex,
                nullptr);
   EC_KEY_set_public_key(key, pub_point);
 
-  ECDSA_SIG *sig =
-      ECDSA_do_sign(reinterpret_cast<const unsigned char *>(hash_bytes.c_str()),
-                    hash_bytes.size(), key);
+  ECDSA_SIG *sig = ECDSA_do_sign(hash_bytes.data(), hash_bytes.size(), key);
 
   const BIGNUM *r_bn, *s_bn;
   ECDSA_SIG_get0(sig, &r_bn, &s_bn);
@@ -346,6 +344,16 @@ inline std::string sign_hash(const std::string &private_key_hex,
 
   return signature;
 }
+
+inline std::string sign_hash(const std::string &private_key_hex,
+                             const std::string &hash_bytes,
+                             const std::string &expected_addr) {
+  std::array<uint8_t, 32> arr;
+  for (size_t i = 0; i < 32 && i < hash_bytes.size(); ++i) {
+    arr[i] = static_cast<uint8_t>(hash_bytes[i]);
+  }
+  return sign_hash_array(private_key_hex, arr, expected_addr);
+}
 } // namespace eth
 
 struct PolySigner {
@@ -356,33 +364,63 @@ struct PolySigner {
                           const std::string &timestamp,
                           const std::string &method, const std::string &path,
                           const std::string &body = "") {
-    // 1. EIP-712 Domain Separator
-    std::string typeHash_Domain = keccak::hash(
-        "EIP712Domain(string name,string version,uint256 chainId)");
-    std::string nameHash = keccak::hash("ClobApi");
-    std::string versionHash = keccak::hash("1");
-    std::string chainId = encode_uint256(137);
-    std::string domainSeparator =
-        keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
+    static const auto domainSeparator = [] {
+      std::string typeHash_Domain = keccak::hash(
+          "EIP712Domain(string name,string version,uint256 chainId)");
+      std::string nameHash = keccak::hash("ClobApi");
+      std::string versionHash = keccak::hash("1");
+      std::string chainId = encode_uint256(137);
+      std::string combined = typeHash_Domain + nameHash + versionHash + chainId;
+      std::string h = keccak::hash(combined);
+      std::array<uint8_t, 32> arr;
+      for (int i = 0; i < 32; ++i)
+        arr[i] = h[i];
+      return arr;
+    }();
 
-    // 2. Struct Hash
-    std::string typeHash_ClobAuth =
-        keccak::hash("ClobAuth(address address,string timestamp,string "
-                     "method,string path,string body)");
-    std::string addrEncoded = encode_address(address_hex);
-    std::string tsHash = keccak::hash(timestamp);
-    std::string mHash = keccak::hash(method);
-    std::string pHash = keccak::hash(path);
-    std::string bHash = keccak::hash(body);
-    std::string structHash = keccak::hash(typeHash_ClobAuth + addrEncoded +
-                                          tsHash + mHash + pHash + bHash);
+    static const auto typeHash_ClobAuth = [] {
+      std::string h =
+          keccak::hash("ClobAuth(address address,string timestamp,string "
+                       "method,string path,string body)");
+      std::array<uint8_t, 32> arr;
+      for (int i = 0; i < 32; ++i)
+        arr[i] = h[i];
+      return arr;
+    }();
 
-    // 3. Final EIP-712 Hash
-    std::string finalHash =
-        keccak::hash("\x19\x01" + domainSeparator + structHash);
+    auto addrEncoded = encode_address_array(address_hex);
+    auto tsHash = keccak::hash_array(
+        reinterpret_cast<const uint8_t *>(timestamp.data()), timestamp.size());
+    auto mHash = keccak::hash_array(
+        reinterpret_cast<const uint8_t *>(method.data()), method.size());
+    auto pHash = keccak::hash_array(
+        reinterpret_cast<const uint8_t *>(path.data()), path.size());
+    auto bHash = keccak::hash_array(
+        reinterpret_cast<const uint8_t *>(body.data()), body.size());
 
-    // 4. ECDSA Sign
-    return eth::sign_hash(private_key_hex, finalHash, address_hex);
+    std::array<uint8_t, 32 * 6> structData;
+    auto copy32 = [](uint8_t *dst, const std::array<uint8_t, 32> &src) {
+      for (int i = 0; i < 32; ++i)
+        dst[i] = src[i];
+    };
+    copy32(structData.data(), typeHash_ClobAuth);
+    copy32(structData.data() + 32, addrEncoded);
+    copy32(structData.data() + 64, tsHash);
+    copy32(structData.data() + 96, mHash);
+    copy32(structData.data() + 128, pHash);
+    copy32(structData.data() + 160, bHash);
+
+    auto structHash = keccak::hash_array(structData.data(), structData.size());
+
+    std::array<uint8_t, 2 + 32 + 32> finalData;
+    finalData[0] = 0x19;
+    finalData[1] = 0x01;
+    copy32(finalData.data() + 2, domainSeparator);
+    copy32(finalData.data() + 34, structHash);
+
+    auto finalHash = keccak::hash_array(finalData.data(), finalData.size());
+
+    return eth::sign_hash_array(private_key_hex, finalHash, address_hex);
   }
 
   static std::string
@@ -390,52 +428,75 @@ struct PolySigner {
              const std::string &token_id, const std::string &price,
              const std::string &size, const std::string &side,
              const std::string &expiration, uint64_t nonce) {
-    // EIP-712 Domain Separator for Polymarket Order
-    std::string typeHash_Domain = keccak::hash(
-        "EIP712Domain(string name,string version,uint256 chainId)");
-    std::string nameHash = keccak::hash("ClobOrder");
-    std::string versionHash = keccak::hash("1");
-    std::string chainId = encode_uint256(137);
-    std::string domainSeparator =
-        keccak::hash(typeHash_Domain + nameHash + versionHash + chainId);
+    static const auto domainSeparator = [] {
+      std::string typeHash_Domain = keccak::hash(
+          "EIP712Domain(string name,string version,uint256 chainId)");
+      std::string nameHash = keccak::hash("ClobOrder");
+      std::string versionHash = keccak::hash("1");
+      std::string chainId = encode_uint256(137);
+      std::string combined = typeHash_Domain + nameHash + versionHash + chainId;
+      std::string h = keccak::hash(combined);
+      std::array<uint8_t, 32> arr;
+      for (int i = 0; i < 32; ++i)
+        arr[i] = h[i];
+      return arr;
+    }();
 
-    // Order Struct Hash
-    // keccak256("Order(address owner,uint256 token_id,uint256 price,uint256
-    // size,uint8 side,uint256 expiration,uint256 nonce)")
-    std::string typeHash_Order = keccak::hash(
-        "Order(address owner,uint256 token_id,uint256 price,uint256 size,uint8 "
-        "side,uint256 expiration,uint256 nonce)");
+    static const auto typeHash_Order = [] {
+      std::string h = keccak::hash("Order(address owner,uint256 "
+                                   "token_id,uint256 price,uint256 size,uint8 "
+                                   "side,uint256 expiration,uint256 nonce)");
+      std::array<uint8_t, 32> arr;
+      for (int i = 0; i < 32; ++i)
+        arr[i] = h[i];
+      return arr;
+    }();
 
-    std::string ownerEncoded = encode_address(address_hex);
-    // Polymarket token_id, price, size are uint256 in the struct
-    // We assume they are passed as strings representing the decimal value
-    // For simplicity, we'll use a helper to convert decimal string to 32-byte
-    // BE
-    auto dec_to_bin = [](std::string s) {
+    auto ownerEncoded = encode_address_array(address_hex);
+    auto dec_to_array = [](const std::string &s) {
       BIGNUM *bn = nullptr;
       BN_dec2bn(&bn, s.c_str());
-      std::string res(32, '\0');
-      BN_bn2binpad(bn, reinterpret_cast<unsigned char *>(res.data()), 32);
+      std::array<uint8_t, 32> res;
+      res.fill(0);
+      BN_bn2binpad(bn, res.data(), 32);
       BN_free(bn);
       return res;
     };
 
-    std::string tokenEncoded = dec_to_bin(token_id);
-    std::string priceEncoded = dec_to_bin(price);
-    std::string sizeEncoded = dec_to_bin(size);
-    std::string sideEncoded(32, '\0');
+    auto tokenEncoded = dec_to_array(token_id);
+    auto priceEncoded = dec_to_array(price);
+    auto sizeEncoded = dec_to_array(size);
+    std::array<uint8_t, 32> sideEncoded;
+    sideEncoded.fill(0);
     sideEncoded[31] = (side == "BUY" ? 0 : 1);
-    std::string expEncoded = dec_to_bin(expiration);
-    std::string nonceEncoded = encode_uint256(nonce);
+    auto expEncoded = dec_to_array(expiration);
+    auto nonceEncoded = encode_uint256_array(nonce);
 
-    std::string structHash = keccak::hash(
-        typeHash_Order + ownerEncoded + tokenEncoded + priceEncoded +
-        sizeEncoded + sideEncoded + expEncoded + nonceEncoded);
+    std::array<uint8_t, 32 * 8> structData;
+    auto copy32 = [](uint8_t *dst, const std::array<uint8_t, 32> &src) {
+      for (int i = 0; i < 32; ++i)
+        dst[i] = src[i];
+    };
+    copy32(structData.data(), typeHash_Order);
+    copy32(structData.data() + 32, ownerEncoded);
+    copy32(structData.data() + 64, tokenEncoded);
+    copy32(structData.data() + 96, priceEncoded);
+    copy32(structData.data() + 128, sizeEncoded);
+    copy32(structData.data() + 160, sideEncoded);
+    copy32(structData.data() + 192, expEncoded);
+    copy32(structData.data() + 224, nonceEncoded);
 
-    std::string finalHash =
-        keccak::hash("\x19\x01" + domainSeparator + structHash);
+    auto structHash = keccak::hash_array(structData.data(), structData.size());
 
-    return eth::sign_hash(private_key_hex, finalHash, address_hex);
+    std::array<uint8_t, 2 + 32 + 32> finalData;
+    finalData[0] = 0x19;
+    finalData[1] = 0x01;
+    copy32(finalData.data() + 2, domainSeparator);
+    copy32(finalData.data() + 34, structHash);
+
+    auto finalHash = keccak::hash_array(finalData.data(), finalData.size());
+
+    return eth::sign_hash_array(private_key_hex, finalHash, address_hex);
   }
 };
 
