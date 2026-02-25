@@ -144,11 +144,13 @@ public:
     tick_container(mm_algos, engine);
 
     // Optimized Strategy Loop
-    for (auto it = active_strategies.begin(); it != active_strategies.end();) {
-      if ((*it)->tick(engine))
-        it = active_strategies.erase(it);
-      else
-        ++it;
+    for (size_t i = 0; i < active_strategies.size();) {
+      if (active_strategies[i]->tick(engine)) {
+        std::swap(active_strategies[i], active_strategies.back());
+        active_strategies.pop_back();
+      } else {
+        ++i;
+      }
     }
   }
 
