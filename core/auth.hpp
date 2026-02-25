@@ -59,12 +59,33 @@ inline std::string encode_uint256(uint64_t val) {
   return res;
 }
 
+inline std::array<uint8_t, 32> encode_uint256_array(uint64_t val) {
+  std::array<uint8_t, 32> res;
+  res.fill(0);
+  for (int i = 0; i < 8; ++i) {
+    res[31 - i] = static_cast<uint8_t>((val >> (i * 8)) & 0xFF);
+  }
+  return res;
+}
+
 inline std::string encode_address(const std::string &addr_hex) {
   auto bytes = from_hex(addr_hex);
   std::string res(32, '\0');
   size_t start = 32 - bytes.size();
   for (size_t i = 0; i < bytes.size(); ++i) {
     res[start + i] = static_cast<char>(bytes[i]);
+  }
+  return res;
+}
+
+inline std::array<uint8_t, 32>
+encode_address_array(const std::string &addr_hex) {
+  auto bytes = from_hex(addr_hex);
+  std::array<uint8_t, 32> res;
+  res.fill(0);
+  size_t start = 32 - bytes.size();
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    res[start + i] = static_cast<uint8_t>(bytes[i]);
   }
   return res;
 }
