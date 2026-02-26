@@ -2,10 +2,10 @@
 
 #include "market_base.hpp"
 #include "websocket.hpp"
-#include <simdjson.h>
 #include <atomic>
 #include <map>
 #include <mutex>
+#include <simdjson.h>
 #include <thread>
 
 namespace bop {
@@ -22,8 +22,9 @@ public:
   inline explicit StreamingMarketBackend(std::unique_ptr<WebSocketClient> ws)
       : ws_(std::move(ws)) {
     if (ws_) {
-      ws_->on_message(
-          [this](std::string_view msg) { this->handle_message(std::string(msg)); });
+      ws_->on_message([this](std::string_view msg) {
+        this->handle_message(std::string(msg));
+      });
 
       // Handle automatic re-subscription on connection/reconnection
       ws_->on_open([this]() {
@@ -35,7 +36,7 @@ public:
     }
   }
 
-  void set_engine(ExecutionEngine* engine) { engine_ = engine; }
+  void set_engine(ExecutionEngine *engine) { engine_ = engine; }
 
   // Market Data (Live) - Now returns cached data with fallback
   Price get_price(MarketId market, bool outcome_yes) const override {
@@ -71,9 +72,19 @@ public:
   void ws_subscribe_orderbook(
       MarketId market,
       std::function<void(const OrderBook &)> callback) const override {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    callbacks_[market.hash] = callback;
-    active_subscriptions_[market.hash] = market; // Track for re-subscription
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      callbacks_[market.hash] = callback;
+      active_subscriptions_[market.hash] = market; // Track for re-subscription
+    }
+
+    // Hydrate from HTTP
+    OrderBook initial_ob = get_orderbook_http(market);
+    if (!initial_ob.bids.empty() || !initial_ob.asks.empty()) {
+      const_cast<StreamingMarketBackend *>(this)->update_orderbook(market,
+                                                                   initial_ob);
+    }
+
     if (ws_ && ws_->is_connected()) {
       send_subscription(market);
     }
@@ -86,14 +97,15 @@ protected:
 
   void update_price(MarketId market, Price yes, Price no);
   void update_orderbook(MarketId market, const OrderBook &ob);
-  void update_orderbook_incremental(MarketId market, bool is_bid, const OrderBookLevel &level);
+  void update_orderbook_incremental(MarketId market, bool is_bid,
+                                    const OrderBookLevel &level);
 
   void notify_fill(const std::string &id, int qty, Price price);
   void notify_status(const std::string &id, OrderStatus status);
 
   mutable std::mutex cache_mutex_;
   std::unique_ptr<WebSocketClient> ws_;
-  ExecutionEngine* engine_ = nullptr;
+  ExecutionEngine *engine_ = nullptr;
   mutable simdjson::ondemand::parser parser_;
 
   struct PricePair {
