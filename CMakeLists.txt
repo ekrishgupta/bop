@@ -19,16 +19,9 @@ find_package(CURL REQUIRED)
 find_package(Boost REQUIRED)
 find_package(SQLite3 REQUIRED)
 
-include(FetchContent)
-FetchContent_Declare(
-  simdjson_content
-  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
-  GIT_TAG v3.10.1
-)
-FetchContent_MakeAvailable(simdjson_content)
-
-# Use an alias to get the expected target name
-add_library(simdjson::simdjson ALIAS simdjson)
+# simdjson is provided in core/external/simdjson
+set(SIMDJSON_SOURCES core/external/simdjson/simdjson.cpp)
+include_directories(core/external/simdjson)
 
 # Static Analysis
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
@@ -44,8 +37,9 @@ add_library(bop_core
     core/impl.cpp
     core/algo.cpp
     core/database.cpp
+    ${SIMDJSON_SOURCES}
 )
-target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::boost simdjson::simdjson SQLite::SQLite3)
+target_link_libraries(bop_core PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl Boost::boost SQLite::SQLite3)
 
 # Main Executable
 add_executable(main main.cpp)
@@ -53,7 +47,7 @@ target_link_libraries(main PRIVATE bop_core)
 
 # Tests
 add_executable(test_dsl tests/test_dsl.cpp)
-target_link_libraries(test_dsl PRIVATE bop_core simdjson)
+target_link_libraries(test_dsl PRIVATE bop_core)
 
 add_executable(backtest_example examples/backtest_example.cpp)
 target_link_libraries(backtest_example PRIVATE bop_core)
