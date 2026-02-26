@@ -78,14 +78,33 @@ inline std::string encode_address(const std::string &addr_hex) {
   return res;
 }
 
+inline uint8_t hex_char_to_val(char c) {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return 0;
+}
+
 inline std::array<uint8_t, 32>
 encode_address_array(const std::string &addr_hex) {
-  auto bytes = from_hex(addr_hex);
   std::array<uint8_t, 32> res;
   res.fill(0);
-  size_t start = 32 - bytes.size();
-  for (size_t i = 0; i < bytes.size(); ++i) {
-    res[start + i] = static_cast<uint8_t>(bytes[i]);
+  const char *str = addr_hex.c_str();
+  size_t len = addr_hex.length();
+  if (len >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+    str += 2;
+    len -= 2;
+  }
+  size_t bytes_len = len / 2;
+  if (bytes_len > 32)
+    bytes_len = 32;
+  size_t start = 32 - bytes_len;
+  for (size_t i = 0; i < bytes_len; ++i) {
+    res[start + i] =
+        (hex_char_to_val(str[2 * i]) << 4) | hex_char_to_val(str[2 * i + 1]);
   }
   return res;
 }
@@ -244,10 +263,47 @@ struct KalshiSigner {
                           const std::string &timestamp,
                           const std::string &method, const std::string &path,
                           const std::string &body = "") {
-    std::string message = timestamp + method + path + body;
-    std::string hmac_res = hmac_sha256(secret, message);
-    return to_base64(reinterpret_cast<const unsigned char *>(hmac_res.c_str()),
-                     hmac_res.length());
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int len = 0;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+    EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
+    OSSL_PARAM params[2];
+    params[0] = OSSL_PARAM_construct_utf8_string("digest", (char *)"SHA256", 0);
+    params[1] = OSSL_PARAM_construct_end();
+    EVP_MAC_init(ctx, reinterpret_cast<const unsigned char *>(secret.c_str()),
+                 secret.length(), params);
+    EVP_MAC_update(ctx,
+                   reinterpret_cast<const unsigned char *>(timestamp.c_str()),
+                   timestamp.length());
+    EVP_MAC_update(ctx, reinterpret_cast<const unsigned char *>(method.c_str()),
+                   method.length());
+    EVP_MAC_update(ctx, reinterpret_cast<const unsigned char *>(path.c_str()),
+                   path.length());
+    if (!body.empty())
+      EVP_MAC_update(ctx, reinterpret_cast<const unsigned char *>(body.c_str()),
+                     body.length());
+    size_t out_len = 0;
+    EVP_MAC_final(ctx, hash, &out_len, sizeof(hash));
+    len = out_len;
+    EVP_MAC_CTX_free(ctx);
+    EVP_MAC_free(mac);
+#else
+    HMAC_CTX *ctx = HMAC_CTX_new();
+    HMAC_Init_ex(ctx, secret.c_str(), secret.length(), EVP_sha256(), NULL);
+    HMAC_Update(ctx, reinterpret_cast<const unsigned char *>(timestamp.c_str()),
+                timestamp.length());
+    HMAC_Update(ctx, reinterpret_cast<const unsigned char *>(method.c_str()),
+                method.length());
+    HMAC_Update(ctx, reinterpret_cast<const unsigned char *>(path.c_str()),
+                path.length());
+    if (!body.empty())
+      HMAC_Update(ctx, reinterpret_cast<const unsigned char *>(body.c_str()),
+                  body.length());
+    HMAC_Final(ctx, hash, &len);
+    HMAC_CTX_free(ctx);
+#endif
+    return to_base64(hash, len);
   }
 };
 
@@ -298,7 +354,22 @@ inline int recover_v(const std::string &hash_bytes, const BIGNUM *r,
 inline std::string sign_hash_array(const std::string &private_key_hex,
                                    const std::array<uint8_t, 32> &hash_bytes,
                                    const std::string &expected_addr = "") {
-  auto priv_bytes = from_hex(private_key_hex);
+  std::array<uint8_t, 32> priv_bytes;
+  priv_bytes.fill(0);
+  const char *str = private_key_hex.c_str();
+  size_t len = private_key_hex.length();
+  if (len >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+    str += 2;
+    len -= 2;
+  }
+  size_t bytes_len = len / 2;
+  if (bytes_len > 32)
+    bytes_len = 32;
+  size_t start = 32 - bytes_len;
+  for (size_t i = 0; i < bytes_len; ++i) {
+    priv_bytes[start + i] =
+        (hex_char_to_val(str[2 * i]) << 4) | hex_char_to_val(str[2 * i + 1]);
+  }
   BIGNUM *priv_bn = BN_bin2bn(priv_bytes.data(), priv_bytes.size(), nullptr);
   EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
   EC_KEY_set_private_key(key, priv_bn);
