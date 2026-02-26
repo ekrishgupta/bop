@@ -29,6 +29,8 @@ class TWAPAlgo : public ExecutionAlgo, public AlgoCRTP<TWAPAlgo> {
   int64_t last_slice_time_ns = 0;
   int total_qty;
   int filled_qty = 0;
+  Price last_price = Price(0);
+  double adaptive_multiplier = 1.0;
 
 public:
   TWAPAlgo(const Order &o);

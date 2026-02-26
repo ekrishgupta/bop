@@ -30,18 +30,59 @@ bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
     return true;
   }
 
+  // Adaptive logic: adjust slice size based on volatility (price moves) and
+  // spread
+  Price current_price =
+      engine.get_price(parent_order.market, parent_order.outcome_yes);
+  Price bid = engine.get_depth(parent_order.market, true);
+  Price ask = engine.get_depth(parent_order.market, false);
+
+  if (current_price.raw != 0) {
+    if (last_price.raw != 0) {
+      double price_change =
+          std::abs(current_price.to_double() - last_price.to_double());
+      // If price is moving fast, reduce slice size to minimize impact
+      if (price_change > 0.05)
+        adaptive_multiplier = 0.7;
+      else if (price_change < 0.01)
+        adaptive_multiplier = 1.3;
+      else
+        adaptive_multiplier = 1.0;
+    }
+    last_price = current_price;
+  }
+
+  if (bid.raw != 0 && ask.raw != 0) {
+    int64_t spread = std::abs(ask.raw - bid.raw);
+    // Wide spread = lower liquidity = smaller slices
+    if (spread > 5)
+      adaptive_multiplier *= 0.8;
+    else if (spread <= 2)
+      adaptive_multiplier *= 1.2;
+  }
+
   // Slice at most once every 5 seconds or if we are at the very beginning
   bool interval_passed =
       (last_slice_time_ns == 0) || (now_ns - last_slice_time_ns > 5e9);
 
   if (interval_passed) {
-    double target_qty = (elapsed_sec / (double)duration_sec) * total_qty;
+    double target_progress = (elapsed_sec / (double)duration_sec);
+    double target_qty = target_progress * total_qty * adaptive_multiplier;
+
+    // Ensure we don't exceed total_qty or fall too far behind
     int to_fill = static_cast<int>(target_qty) - filled_qty;
 
-    if (to_fill > 0) {
-      dispatch_slice(to_fill, engine);
-      filled_qty += to_fill;
-      last_slice_time_ns = now_ns;
+    // Minimum slice size to avoid too many small orders, but ensure we fill
+    // eventually
+    if (to_fill > 0 || elapsed_sec > duration_sec * 0.9) {
+      to_fill = std::max(to_fill, 0);
+      to_fill = std::min(to_fill, total_qty - filled_qty);
+
+      if (to_fill > 0) {
+        dispatch_slice(to_fill, engine);
+        filled_qty += to_fill;
+        last_slice_time_ns = now_ns;
+      }
     }
   }
   return false;
