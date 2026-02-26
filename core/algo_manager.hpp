@@ -71,6 +71,7 @@ class AlgoManager {
   std::vector<std::unique_ptr<VWAPAlgo>> vwap_algos;
   std::vector<std::unique_ptr<ArbitrageAlgo>> arb_algos;
   std::vector<std::unique_ptr<MarketMakerAlgo>> mm_algos;
+  std::vector<std::unique_ptr<SORAlgo>> sor_algos;
 
   // Generic strategies still use the virtual interface but are optimized via
   // CRTP where possible
@@ -122,6 +123,9 @@ public:
         case AlgoType::MarketMaker:
           mm_algos.push_back(std::make_unique<MarketMakerAlgo>(o));
           break;
+        case AlgoType::SOR:
+          sor_algos.push_back(std::make_unique<SORAlgo>(o));
+          break;
         default:
           break;
         }
@@ -142,6 +146,7 @@ public:
     tick_container(vwap_algos, engine);
     tick_container(arb_algos, engine);
     tick_container(mm_algos, engine);
+    tick_container(sor_algos, engine);
 
     // Optimized Strategy Loop
     for (size_t i = 0; i < active_strategies.size();) {
@@ -158,7 +163,7 @@ public:
     std::lock_guard<std::mutex> lock(mtx);
     return twap_algos.size() + trailing_algos.size() + peg_algos.size() +
            vwap_algos.size() + arb_algos.size() + mm_algos.size() +
-           active_strategies.size();
+           sor_algos.size() + active_strategies.size();
   }
 
   void broadcast_market_event(ExecutionEngine &engine, MarketId m, Price p,

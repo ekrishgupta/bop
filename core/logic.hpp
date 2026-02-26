@@ -26,7 +26,14 @@ struct RiskQuery {
 
 struct BalanceQuery {};
 struct PortfolioQuery {
-  enum class Metric { TotalDelta, TotalGamma, TotalTheta, TotalVega, NetExposure, PortfolioValue };
+  enum class Metric {
+    TotalDelta,
+    TotalGamma,
+    TotalTheta,
+    TotalVega,
+    NetExposure,
+    PortfolioValue
+  };
   Metric metric;
 };
 
@@ -59,9 +66,9 @@ struct MarketTarget {
   }
 
   inline MarketTarget Universal() const {
-      auto r = *this;
-      r.is_universal = true;
-      return r;
+    auto r = *this;
+    r.is_universal = true;
+    return r;
   }
 
   inline MarketQuery<PriceTag> Price(YES_t) const {
@@ -97,15 +104,21 @@ struct MarketTarget {
 
   // Event Hooks
   inline MarketId OnTrade() const { return resolve().market; }
-  
+
   struct EventBinder {
     MarketId market;
     enum class Type { Fill, Cancel, Error } type;
   };
 
-  inline EventBinder OnFill() const { return {resolve().market, EventBinder::Type::Fill}; }
-  inline EventBinder OnCancel() const { return {resolve().market, EventBinder::Type::Cancel}; }
-  inline EventBinder OnError() const { return {resolve().market, EventBinder::Type::Error}; }
+  inline EventBinder OnFill() const {
+    return {resolve().market, EventBinder::Type::Fill};
+  }
+  inline EventBinder OnCancel() const {
+    return {resolve().market, EventBinder::Type::Cancel};
+  }
+  inline EventBinder OnError() const {
+    return {resolve().market, EventBinder::Type::Error};
+  }
 
   // WebSocket Streaming Entry Points
   inline void
@@ -130,11 +143,12 @@ struct SpreadTarget {
 
   SpreadTarget resolve() const {
     if (backend) {
-        std::string id1 = m1.resolved ? m1.ticker : backend->resolve_ticker(m1.ticker);
-        std::string id2 = m2.resolved ? m2.ticker : backend->resolve_ticker(m2.ticker);
-        return {MarketId(fnv1a(id1.c_str()), id1, true), 
-                MarketId(fnv1a(id2.c_str()), id2, true), 
-                backend};
+      std::string id1 =
+          m1.resolved ? m1.ticker : backend->resolve_ticker(m1.ticker);
+      std::string id2 =
+          m2.resolved ? m2.ticker : backend->resolve_ticker(m2.ticker);
+      return {MarketId(fnv1a(id1.c_str()), id1, true),
+              MarketId(fnv1a(id2.c_str()), id2, true), backend};
     }
     return *this;
   }
@@ -180,6 +194,55 @@ inline Order operator/(const MarketBoundSpread &m, NO_t) {
   return o;
 }
 
+struct SORTarget {
+  std::string ticker;
+  const MarketBackend *b1;
+  const MarketBackend *b2;
+};
+
+inline SORTarget operator|(const MarketTarget &a, const MarketTarget &b) {
+  return {a.market.ticker, a.backend, b.backend};
+}
+
+struct SORBoundOrder {
+  int quantity;
+  bool is_buy;
+  SORTarget target;
+  int64_t timestamp_ns;
+};
+
+inline SORBoundOrder operator/(const Buy &b, const SORTarget &target) {
+  return {b.quantity, true, target, b.timestamp_ns};
+}
+
+inline SORBoundOrder operator/(const Sell &s, const SORTarget &target) {
+  return {s.quantity, false, target, s.timestamp_ns};
+}
+
+inline Order operator/(const SORBoundOrder &m, YES_t) {
+  Order o{MarketId(m.target.ticker.c_str()),
+          m.quantity,
+          m.is_buy,
+          true,
+          Price(0),
+          m.timestamp_ns};
+  o.algo_type = AlgoType::SOR;
+  o.algo_params = SORData{m.target.b1, m.target.b2};
+  return o;
+}
+
+inline Order operator/(const SORBoundOrder &m, NO_t) {
+  Order o{MarketId(m.target.ticker.c_str()),
+          m.quantity,
+          m.is_buy,
+          false,
+          Price(0),
+          m.timestamp_ns};
+  o.algo_type = AlgoType::SOR;
+  o.algo_params = SORData{m.target.b1, m.target.b2};
+  return o;
+}
+
 struct MarketBoundQuote {
   int quantity;
   MarketId market;
@@ -203,23 +266,23 @@ inline MarketBoundQuote operator/(const Quote &q, MarketTarget target) {
 }
 
 struct Spread {
-    Price value;
-    explicit Spread(Price p) : value(p) {}
+  Price value;
+  explicit Spread(Price p) : value(p) {}
 };
 
 inline MarketBoundQuote operator|(MarketBoundQuote q, Spread s) {
-    q.spread = s.value;
-    return q;
+  q.spread = s.value;
+  return q;
 }
 
 struct Offset {
-    ReferencePrice ref;
-    explicit Offset(ReferencePrice r) : ref(r) {}
+  ReferencePrice ref;
+  explicit Offset(ReferencePrice r) : ref(r) {}
 };
 
 inline MarketBoundQuote operator|(MarketBoundQuote q, Offset o) {
-    q.ref = o.ref;
-    return q;
+  q.ref = o.ref;
+  return q;
 }
 
 class ExecutionEngine;
@@ -427,10 +490,15 @@ inline MarketQuery<PositionTag> Position(MarketTarget target) {
 
 inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
 
-inline MarketQuery<OpenOrdersTag> OpenOrders(MarketId mkt) { return {mkt, true}; }
-inline MarketQuery<OpenOrdersTag> OpenOrders(const MarketTarget &mt) { return {mt.market, true}; }
+inline MarketQuery<OpenOrdersTag> OpenOrders(MarketId mkt) {
+  return {mkt, true};
+}
+inline MarketQuery<OpenOrdersTag> OpenOrders(const MarketTarget &mt) {
+  return {mt.market, true};
+}
 
-inline Condition<OpenOrdersTag> operator<(MarketQuery<OpenOrdersTag> q, int threshold) {
+inline Condition<OpenOrdersTag> operator<(MarketQuery<OpenOrdersTag> q,
+                                          int threshold) {
   return {q, static_cast<long long>(threshold), false};
 }
 
@@ -458,12 +526,24 @@ struct PortfolioMetricProxy {
 };
 
 struct PortfolioProxy {
-  inline PortfolioMetricProxy TotalDelta() const { return {PortfolioQuery::Metric::TotalDelta}; }
-  inline PortfolioMetricProxy TotalGamma() const { return {PortfolioQuery::Metric::TotalGamma}; }
-  inline PortfolioMetricProxy TotalTheta() const { return {PortfolioQuery::Metric::TotalTheta}; }
-  inline PortfolioMetricProxy TotalVega() const { return {PortfolioQuery::Metric::TotalVega}; }
-  inline PortfolioMetricProxy NetExposure() const { return {PortfolioQuery::Metric::NetExposure}; }
-  inline PortfolioMetricProxy PortfolioValue() const { return {PortfolioQuery::Metric::PortfolioValue}; }
+  inline PortfolioMetricProxy TotalDelta() const {
+    return {PortfolioQuery::Metric::TotalDelta};
+  }
+  inline PortfolioMetricProxy TotalGamma() const {
+    return {PortfolioQuery::Metric::TotalGamma};
+  }
+  inline PortfolioMetricProxy TotalTheta() const {
+    return {PortfolioQuery::Metric::TotalTheta};
+  }
+  inline PortfolioMetricProxy TotalVega() const {
+    return {PortfolioQuery::Metric::TotalVega};
+  }
+  inline PortfolioMetricProxy NetExposure() const {
+    return {PortfolioQuery::Metric::NetExposure};
+  }
+  inline PortfolioMetricProxy PortfolioValue() const {
+    return {PortfolioQuery::Metric::PortfolioValue};
+  }
 };
 
 inline PortfolioProxy Portfolio() { return {}; }
@@ -479,19 +559,23 @@ inline WhenBinder<TimeTrigger> At(std::chrono::system_clock::time_point t) {
   return {TimeTrigger{t}};
 }
 
-inline WhenBinder<TimeTrigger> At(const std::string& iso_time) {
-    std::tm tm = {};
-    strptime(iso_time.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
-    auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-    return {TimeTrigger{tp}};
+inline WhenBinder<TimeTrigger> At(const std::string &iso_time) {
+  std::tm tm = {};
+  strptime(iso_time.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+  auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+  return {TimeTrigger{tp}};
 }
 
-inline Condition<PortfolioTag, PortfolioQuery> operator>(PortfolioMetricProxy p, double threshold) {
-  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000), true}; 
+inline Condition<PortfolioTag, PortfolioQuery> operator>(PortfolioMetricProxy p,
+                                                         double threshold) {
+  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000),
+          true};
 }
 
-inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p, double threshold) {
-  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000), false};
+inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p,
+                                                         double threshold) {
+  return {PortfolioQuery{p.metric}, static_cast<int64_t>(threshold * 1000000),
+          false};
 }
 
 // Exposure/PnL comparisons

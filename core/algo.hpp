@@ -9,12 +9,11 @@ namespace bop {
 
 struct ExecutionEngine;
 
-template <typename Derived>
-class AlgoCRTP {
+template <typename Derived> class AlgoCRTP {
 public:
-    bool tick(ExecutionEngine& engine) {
-        return static_cast<Derived*>(this)->tick_impl(engine);
-    }
+  bool tick(ExecutionEngine &engine) {
+    return static_cast<Derived *>(this)->tick_impl(engine);
+  }
 };
 
 class ExecutionAlgo {
@@ -40,7 +39,8 @@ private:
   void dispatch_slice(int qty, ExecutionEngine &engine);
 };
 
-class TrailingStopAlgo : public ExecutionAlgo, public AlgoCRTP<TrailingStopAlgo> {
+class TrailingStopAlgo : public ExecutionAlgo,
+                         public AlgoCRTP<TrailingStopAlgo> {
   Price best_price;
   Price trail_amount;
   std::string active_order_id;
@@ -104,6 +104,18 @@ class MarketMakerAlgo : public ExecutionAlgo, public AlgoCRTP<MarketMakerAlgo> {
 
 public:
   MarketMakerAlgo(const Order &o);
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine);
+};
+
+class SORAlgo : public ExecutionAlgo, public AlgoCRTP<SORAlgo> {
+  const MarketBackend *b1;
+  const MarketBackend *b2;
+  int total_qty;
+  bool active = true;
+
+public:
+  SORAlgo(const Order &o);
   bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
   bool tick_impl(ExecutionEngine &engine);
 };

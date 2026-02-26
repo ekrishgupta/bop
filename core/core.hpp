@@ -25,12 +25,12 @@ constexpr uint32_t fnv1a(const char *str, uint32_t hash = FNV_OFFSET_BASIS) {
 }
 
 inline uint32_t fnv1a(std::string_view sv) {
-    uint32_t hash = FNV_OFFSET_BASIS;
-    for (char c : sv) {
-        hash ^= static_cast<uint32_t>(c);
-        hash *= FNV_PRIME;
-    }
-    return hash;
+  uint32_t hash = FNV_OFFSET_BASIS;
+  for (char c : sv) {
+    hash ^= static_cast<uint32_t>(c);
+    hash *= FNV_PRIME;
+  }
+  return hash;
 }
 
 // Compile-Time Market ID wrapper
@@ -43,8 +43,10 @@ struct MarketId {
   explicit MarketId(uint32_t h) : hash(h), ticker(""), resolved(false) {}
   MarketId(const char *t) : hash(fnv1a(t)), ticker(t), resolved(false) {}
   MarketId(std::string_view t) : hash(fnv1a(t)), ticker(t), resolved(false) {}
-  MarketId(uint32_t h, std::string t) : hash(h), ticker(std::move(t)), resolved(false) {}
-  MarketId(uint32_t h, std::string t, bool r) : hash(h), ticker(std::move(t)), resolved(r) {}
+  MarketId(uint32_t h, std::string t)
+      : hash(h), ticker(std::move(t)), resolved(false) {}
+  MarketId(uint32_t h, std::string t, bool r)
+      : hash(h), ticker(std::move(t)), resolved(r) {}
 };
 
 // Compile-Time Account ID wrapper
@@ -60,7 +62,14 @@ struct NO_t {};
 static constexpr NO_t NO;
 
 // Order Status
-enum class OrderStatus { Pending, Open, PartiallyFilled, Filled, Cancelled, Rejected };
+enum class OrderStatus {
+  Pending,
+  Open,
+  PartiallyFilled,
+  Filled,
+  Cancelled,
+  Rejected
+};
 
 // Time In Force
 enum class TimeInForce { GTC, IOC, FOK };
@@ -74,7 +83,16 @@ constexpr ReferencePrice Bid = ReferencePrice::Bid;
 constexpr ReferencePrice Ask = ReferencePrice::Ask;
 constexpr ReferencePrice Mid = ReferencePrice::Mid;
 
-enum class AlgoType : uint8_t { None, Peg, TWAP, VWAP, Trailing, Arbitrage, MarketMaker };
+enum class AlgoType : uint8_t {
+  None,
+  Peg,
+  TWAP,
+  VWAP,
+  Trailing,
+  Arbitrage,
+  MarketMaker,
+  SOR
+};
 
 struct PegData {
   ReferencePrice ref;
@@ -82,14 +100,19 @@ struct PegData {
 };
 
 struct ArbData {
-    MarketId m2;
-    const MarketBackend* b2;
-    Price min_profit;
+  MarketId m2;
+  const MarketBackend *b2;
+  Price min_profit;
 };
 
 struct MarketMakerData {
-    Price spread;
-    ReferencePrice ref;
+  Price spread;
+  ReferencePrice ref;
+};
+
+struct SORData {
+  const MarketBackend *b1;
+  const MarketBackend *b2;
 };
 
 struct Order {
@@ -110,7 +133,9 @@ struct Order {
   const MarketBackend *backend = nullptr;
 
   AlgoType algo_type = AlgoType::None;
-  std::variant<std::monostate, PegData, int64_t, double, Price, ArbData, MarketMakerData> algo_params;
+  std::variant<std::monostate, PegData, int64_t, double, Price, ArbData,
+               MarketMakerData, SORData>
+      algo_params;
 
   MarketId market2 = MarketId(0u);
   bool is_spread = false;
