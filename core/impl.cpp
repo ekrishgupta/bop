@@ -205,35 +205,18 @@ void StreamingMarketBackend::update_orderbook_incremental(
   {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto &ob = orderbook_cache_[market.hash];
-    auto &target = is_bid ? ob.bids : ob.asks;
 
-    auto it = std::find_if(target.begin(), target.end(),
-                           [&](const OrderBookLevel &l) {
-                             return l.price.raw == level.price.raw;
-                           });
-
-    if (it != target.end()) {
-      // level.quantity is the DELTA in Kalshi, but usually it's the NEW total.
-      // For standard incremental feeds, it's the NEW quantity.
-      // If it's 0, the level is removed.
+    if (is_bid) {
       if (level.quantity <= 0) {
-        target.erase(it);
+        ob.bids.erase(level.price);
       } else {
-        it->quantity = level.quantity;
+        ob.bids[level.price] = level.quantity;
       }
-    } else if (level.quantity > 0) {
-      target.push_back(level);
-      // Re-sort bids descending, asks ascending
-      if (is_bid) {
-        std::sort(target.begin(), target.end(),
-                  [](const auto &a, const auto &b) {
-                    return a.price.raw > b.price.raw;
-                  });
+    } else {
+      if (level.quantity <= 0) {
+        ob.asks.erase(level.price);
       } else {
-        std::sort(target.begin(), target.end(),
-                  [](const auto &a, const auto &b) {
-                    return a.price.raw < b.price.raw;
-                  });
+        ob.asks[level.price] = level.quantity;
       }
     }
   }
