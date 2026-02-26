@@ -367,7 +367,7 @@ struct PolySigner {
     static const auto domainSeparator = [] {
       std::string typeHash_Domain = keccak::hash(
           "EIP712Domain(string name,string version,uint256 chainId)");
-      std::string nameHash = keccak::hash("ClobApi");
+      std::string nameHash = keccak::hash("ClobAuthDomain");
       std::string versionHash = keccak::hash("1");
       std::string chainId = encode_uint256(137);
       std::string combined = typeHash_Domain + nameHash + versionHash + chainId;
@@ -431,7 +431,7 @@ struct PolySigner {
     static const auto domainSeparator = [] {
       std::string typeHash_Domain = keccak::hash(
           "EIP712Domain(string name,string version,uint256 chainId)");
-      std::string nameHash = keccak::hash("ClobOrder");
+      std::string nameHash = keccak::hash("ClobOrderDomain");
       std::string versionHash = keccak::hash("1");
       std::string chainId = encode_uint256(137);
       std::string combined = typeHash_Domain + nameHash + versionHash + chainId;
@@ -443,48 +443,61 @@ struct PolySigner {
     }();
 
     static const auto typeHash_Order = [] {
-      std::string h = keccak::hash("Order(address owner,uint256 "
-                                   "token_id,uint256 price,uint256 size,uint8 "
-                                   "side,uint256 expiration,uint256 nonce)");
+      // Latest Polymarket Order structure includes taker and feeRateBps
+      std::string h = keccak::hash("Order(address maker,address taker,uint256 "
+                                   "tokenID,uint256 price,uint256 amount,uint8 "
+                                   "side,uint256 expiration,uint256 "
+                                   "nonce,uint256 feeRateBps,uint256 salt)");
       std::array<uint8_t, 32> arr;
       for (int i = 0; i < 32; ++i)
         arr[i] = h[i];
       return arr;
     }();
 
-    auto ownerEncoded = encode_address_array(address_hex);
+    auto makerEncoded = encode_address_array(address_hex);
+    auto takerEncoded =
+        encode_address_array("0x0000000000000000000000000000000000000000");
+
     auto dec_to_array = [](const std::string &s) {
       BIGNUM *bn = nullptr;
       BN_dec2bn(&bn, s.c_str());
       std::array<uint8_t, 32> res;
       res.fill(0);
-      BN_bn2binpad(bn, res.data(), 32);
-      BN_free(bn);
+      if (bn) {
+        BN_bn2binpad(bn, res.data(), 32);
+        BN_free(bn);
+      }
       return res;
     };
 
     auto tokenEncoded = dec_to_array(token_id);
     auto priceEncoded = dec_to_array(price);
-    auto sizeEncoded = dec_to_array(size);
+    auto amountEncoded = dec_to_array(size);
     std::array<uint8_t, 32> sideEncoded;
     sideEncoded.fill(0);
     sideEncoded[31] = (side == "BUY" ? 0 : 1);
     auto expEncoded = dec_to_array(expiration);
     auto nonceEncoded = encode_uint256_array(nonce);
+    auto feeRateEncoded = encode_uint256_array(0); // Default to 0
+    auto saltEncoded =
+        encode_uint256_array(nonce); // Use nonce as salt for determinism
 
-    std::array<uint8_t, 32 * 8> structData;
+    std::array<uint8_t, 32 * 11> structData;
     auto copy32 = [](uint8_t *dst, const std::array<uint8_t, 32> &src) {
       for (int i = 0; i < 32; ++i)
         dst[i] = src[i];
     };
     copy32(structData.data(), typeHash_Order);
-    copy32(structData.data() + 32, ownerEncoded);
-    copy32(structData.data() + 64, tokenEncoded);
-    copy32(structData.data() + 96, priceEncoded);
-    copy32(structData.data() + 128, sizeEncoded);
-    copy32(structData.data() + 160, sideEncoded);
-    copy32(structData.data() + 192, expEncoded);
-    copy32(structData.data() + 224, nonceEncoded);
+    copy32(structData.data() + 32, makerEncoded);
+    copy32(structData.data() + 64, takerEncoded);
+    copy32(structData.data() + 96, tokenEncoded);
+    copy32(structData.data() + 128, priceEncoded);
+    copy32(structData.data() + 160, amountEncoded);
+    copy32(structData.data() + 192, sideEncoded);
+    copy32(structData.data() + 224, expEncoded);
+    copy32(structData.data() + 256, nonceEncoded);
+    copy32(structData.data() + 288, feeRateEncoded);
+    copy32(structData.data() + 320, saltEncoded);
 
     auto structHash = keccak::hash_array(structData.data(), structData.size());
 
