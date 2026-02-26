@@ -97,16 +97,16 @@ struct Polymarket : public StreamingMarketBackend {
         OrderBook ob;
         if (j.contains("bids")) {
           for (auto &b : j["bids"]) {
-            ob.bids.push_back(
-                {Price::from_double(std::stod(b["price"].get<std::string>())),
-                 static_cast<int>(std::stod(b["size"].get<std::string>()))});
+            ob.bids[Price::from_double(
+                std::stod(b["price"].get<std::string>()))] =
+                static_cast<int64_t>(std::stod(b["size"].get<std::string>()));
           }
         }
         if (j.contains("asks")) {
           for (auto &a : j["asks"]) {
-            ob.asks.push_back(
-                {Price::from_double(std::stod(a["price"].get<std::string>())),
-                 static_cast<int>(std::stod(a["size"].get<std::string>()))});
+            ob.asks[Price::from_double(
+                std::stod(a["price"].get<std::string>()))] =
+                static_cast<int64_t>(std::stod(a["size"].get<std::string>()));
           }
         }
         return ob;
@@ -148,12 +148,23 @@ struct Polymarket : public StreamingMarketBackend {
 
         if (type == "price_change") {
           std::string_view token_id;
-          std::string_view price_str;
+          std::string_view price_str, size_str, side_str;
           if (!event["token_id"].get(token_id) &&
-              !event["price"].get(price_str)) {
+              !event["price"].get(price_str) && !event["size"].get(size_str) &&
+              !event["side"].get(side_str)) {
             double price = std::stod(std::string(price_str));
-            update_price(MarketId(token_id), Price::from_double(price),
-                         Price::from_double(1.0 - price));
+            double size = std::stod(std::string(size_str));
+            bool is_buy = (side_str == "BUY");
+
+            update_orderbook_incremental(
+                MarketId(token_id), is_buy,
+                {Price::from_double(price), static_cast<int64_t>(size)});
+
+            // Also update the top-level price cache
+            if (size > 0) {
+              update_price(MarketId(token_id), Price::from_double(price),
+                           Price::from_double(1.0 - price));
+            }
           }
         } else if (type == "book") {
           std::string_view token_id;
@@ -166,9 +177,8 @@ struct Polymarket : public StreamingMarketBackend {
               auto it = arr.begin();
               (*it).get(p_str);
               (++it)->get(s_str);
-              ob.bids.push_back(
-                  {Price::from_double(std::stod(std::string(p_str))),
-                   static_cast<int>(std::stod(std::string(s_str)))});
+              ob.bids[Price::from_double(std::stod(std::string(p_str)))] =
+                  static_cast<int64_t>(std::stod(std::string(s_str)));
             }
             auto asks = event["asks"];
             for (auto item : asks) {
@@ -177,9 +187,8 @@ struct Polymarket : public StreamingMarketBackend {
               auto it = arr.begin();
               (*it).get(p_str);
               (++it)->get(s_str);
-              ob.asks.push_back(
-                  {Price::from_double(std::stod(std::string(p_str))),
-                   static_cast<int>(std::stod(std::string(s_str)))});
+              ob.asks[Price::from_double(std::stod(std::string(p_str)))] =
+                  static_cast<int64_t>(std::stod(std::string(s_str)));
             }
             update_orderbook(MarketId(token_id), ob);
           }
@@ -232,13 +241,13 @@ struct Polymarket : public StreamingMarketBackend {
     OrderBook ob = get_orderbook(market);
     if (ob.bids.empty() || ob.asks.empty())
       return Price(0);
-    return Price((ob.bids[0].price.raw + ob.asks[0].price.raw) / 2);
+    return Price((ob.bids.begin()->first.raw + ob.asks.begin()->first.raw) / 2);
   }
   Price clob_get_spread(MarketId market) const override {
     OrderBook ob = get_orderbook(market);
     if (ob.bids.empty() || ob.asks.empty())
       return Price(100);
-    return Price(ob.asks[0].price.raw - ob.bids[0].price.raw);
+    return Price(ob.asks.begin()->first.raw - ob.bids.begin()->first.raw);
   }
   Price clob_get_last_trade_price(MarketId market) const override {
     return Price::from_cents(61);
