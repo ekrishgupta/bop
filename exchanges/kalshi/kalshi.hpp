@@ -80,14 +80,14 @@ struct Kalshi : public StreamingMarketBackend {
           auto &book = j["orderbook"];
           if (book.contains("bids")) {
             for (auto &b : book["bids"]) {
-              ob.bids.push_back({Price::from_cents(b[0].get<int64_t>()),
-                                 static_cast<int>(b[1].get<int64_t>())});
+              ob.bids[Price::from_cents(b[0].get<int64_t>())] =
+                  b[1].get<int64_t>();
             }
           }
           if (book.contains("asks")) {
             for (auto &a : book["asks"]) {
-              ob.asks.push_back({Price::from_cents(a[0].get<int64_t>()),
-                                 static_cast<int>(a[1].get<int64_t>())});
+              ob.asks[Price::from_cents(a[0].get<int64_t>())] =
+                  a[1].get<int64_t>();
             }
           }
         }
@@ -147,8 +147,7 @@ struct Kalshi : public StreamingMarketBackend {
             auto it = arr.begin();
             (*it).get(price);
             (++it)->get(qty);
-            ob.bids.push_back(
-                {Price::from_cents(price), static_cast<int>(qty)});
+            ob.bids[Price::from_cents(price)] = qty;
           }
           auto asks = m["asks"];
           for (auto item : asks) {
@@ -157,8 +156,7 @@ struct Kalshi : public StreamingMarketBackend {
             auto it = arr.begin();
             (*it).get(price);
             (++it)->get(qty);
-            ob.asks.push_back(
-                {Price::from_cents(price), static_cast<int>(qty)});
+            ob.asks[Price::from_cents(price)] = qty;
           }
           update_orderbook(MarketId(ticker), ob);
         }
