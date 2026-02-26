@@ -15,7 +15,8 @@ struct Polymarket : public StreamingMarketBackend {
   std::string name() const override { return "Polymarket"; }
 
   void sync_markets() override {
-    std::string url = "https://gamma-api.polymarket.com/markets?active=true&limit=100";
+    std::string url =
+        "https://gamma-api.polymarket.com/markets?active=true&limit=100";
     try {
       auto resp = Network.get(url);
       if (resp.status_code == 200) {
@@ -23,10 +24,12 @@ struct Polymarket : public StreamingMarketBackend {
         for (auto &m : j) {
           std::string slug = m["slug"];
           std::string cond_id = m["conditionId"];
-          
+
           ticker_to_id[slug] = cond_id;
-          if (m.contains("groupTicker")) ticker_to_id[m["groupTicker"]] = cond_id;
-          if (m.contains("question")) ticker_to_id[m["question"]] = cond_id;
+          if (m.contains("groupTicker"))
+            ticker_to_id[m["groupTicker"]] = cond_id;
+          if (m.contains("question"))
+            ticker_to_id[m["question"]] = cond_id;
 
           if (m.contains("clobTokenIds")) {
             auto tokens_str = m["clobTokenIds"].get<std::string>();
@@ -34,14 +37,14 @@ struct Polymarket : public StreamingMarketBackend {
             if (tokens.size() >= 2) {
               std::string yes_token = tokens[0].get<std::string>();
               std::string no_token = tokens[1].get<std::string>();
-              
+
               ticker_to_id[slug + "_YES"] = yes_token;
               ticker_to_id[slug + "_NO"] = no_token;
-              
+
               if (m.contains("groupTicker")) {
-                  std::string gt = m["groupTicker"];
-                  ticker_to_id[gt + "_YES"] = yes_token;
-                  ticker_to_id[gt + "_NO"] = no_token;
+                std::string gt = m["groupTicker"];
+                ticker_to_id[gt + "_YES"] = yes_token;
+                ticker_to_id[gt + "_NO"] = no_token;
               }
             }
           }
@@ -84,7 +87,33 @@ struct Polymarket : public StreamingMarketBackend {
   }
 
   OrderBook get_orderbook_http(MarketId market) const override {
-    return {{{Price::from_cents(59), 200}}, {{Price::from_cents(61), 250}}};
+    std::string token_id = resolve_token_id(market, true);
+    std::string url =
+        std::string("https://clob.polymarket.com/book?token_id=") + token_id;
+    try {
+      auto resp = Network.get(url);
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        OrderBook ob;
+        if (j.contains("bids")) {
+          for (auto &b : j["bids"]) {
+            ob.bids.push_back(
+                {Price::from_double(std::stod(b["price"].get<std::string>())),
+                 static_cast<int>(std::stod(b["size"].get<std::string>()))});
+          }
+        }
+        if (j.contains("asks")) {
+          for (auto &a : j["asks"]) {
+            ob.asks.push_back(
+                {Price::from_double(std::stod(a["price"].get<std::string>())),
+                 static_cast<int>(std::stod(a["size"].get<std::string>()))});
+          }
+        }
+        return ob;
+      }
+    } catch (...) {
+    }
+    return {};
   }
 
   Price get_depth(MarketId, bool) const override {
@@ -103,25 +132,56 @@ struct Polymarket : public StreamingMarketBackend {
     // Subscribe to both YES and NO tokens for the market
     j["token_ids"] = {resolve_token_id(market, true),
                       resolve_token_id(market, false)};
-    j["channels"] = {"trades"};
+    j["channels"] = {"trades", "book"};
     ws_->send(j.dump());
   }
 
   void handle_message(std::string_view msg) override {
     try {
-      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.size());
-      
+      simdjson::ondemand::document doc =
+          parser_.iterate(msg.data(), msg.size(), msg.size());
+
       auto process_event = [this](auto event) {
         std::string_view type;
-        if (event["event_type"].get(type)) return;
+        if (event["event_type"].get(type))
+          return;
 
         if (type == "price_change") {
           std::string_view token_id;
           std::string_view price_str;
-          if (!event["token_id"].get(token_id) && !event["price"].get(price_str)) {
+          if (!event["token_id"].get(token_id) &&
+              !event["price"].get(price_str)) {
             double price = std::stod(std::string(price_str));
             update_price(MarketId(token_id), Price::from_double(price),
                          Price::from_double(1.0 - price));
+          }
+        } else if (type == "book") {
+          std::string_view token_id;
+          if (!event["token_id"].get(token_id)) {
+            OrderBook ob;
+            auto bids = event["bids"];
+            for (auto item : bids) {
+              std::string_view p_str, s_str;
+              auto arr = item.get_array();
+              auto it = arr.begin();
+              (*it).get(p_str);
+              (++it)->get(s_str);
+              ob.bids.push_back(
+                  {Price::from_double(std::stod(std::string(p_str))),
+                   static_cast<int>(std::stod(std::string(s_str)))});
+            }
+            auto asks = event["asks"];
+            for (auto item : asks) {
+              std::string_view p_str, s_str;
+              auto arr = item.get_array();
+              auto it = arr.begin();
+              (*it).get(p_str);
+              (++it)->get(s_str);
+              ob.asks.push_back(
+                  {Price::from_double(std::stod(std::string(p_str))),
+                   static_cast<int>(std::stod(std::string(s_str)))});
+            }
+            update_orderbook(MarketId(token_id), ob);
           }
         } else if (type == "order_update") {
           auto order = event["order"];
@@ -135,12 +195,15 @@ struct Polymarket : public StreamingMarketBackend {
                 std::string_view fill_price_str;
                 if (!event["fill_price"].get(fill_price_str)) {
                   double fill_price = std::stod(std::string(fill_price_str));
-                  notify_fill(std::string(id), static_cast<int>(fill_size), Price::from_double(fill_price));
+                  notify_fill(std::string(id), static_cast<int>(fill_size),
+                              Price::from_double(fill_price));
                 }
               }
             }
-            if (status_str == "closed") notify_status(std::string(id), OrderStatus::Filled);
-            else if (status_str == "canceled") notify_status(std::string(id), OrderStatus::Cancelled);
+            if (status_str == "closed")
+              notify_status(std::string(id), OrderStatus::Filled);
+            else if (status_str == "canceled")
+              notify_status(std::string(id), OrderStatus::Cancelled);
           }
         }
       };
@@ -166,10 +229,16 @@ struct Polymarket : public StreamingMarketBackend {
 
   // --- CLOB Specifics ---
   Price clob_get_midpoint(MarketId market) const override {
-    return Price::from_cents(60);
+    OrderBook ob = get_orderbook(market);
+    if (ob.bids.empty() || ob.asks.empty())
+      return Price(0);
+    return Price((ob.bids[0].price.raw + ob.asks[0].price.raw) / 2);
   }
   Price clob_get_spread(MarketId market) const override {
-    return Price::from_cents(2);
+    OrderBook ob = get_orderbook(market);
+    if (ob.bids.empty() || ob.asks.empty())
+      return Price(100);
+    return Price(ob.asks[0].price.raw - ob.bids[0].price.raw);
   }
   Price clob_get_last_trade_price(MarketId market) const override {
     return Price::from_cents(61);
@@ -254,8 +323,9 @@ struct Polymarket : public StreamingMarketBackend {
         std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
             .count();
     std::string timestamp = std::to_string(s);
-    std::string signature = auth::PolySigner::sign(
-        credentials.secret_key, credentials.address, timestamp, method, path, body);
+    std::string signature =
+        auth::PolySigner::sign(credentials.secret_key, credentials.address,
+                               timestamp, method, path, body);
 
     return {{"POLY-API-KEY", credentials.api_key},
             {"POLY-PASSPHRASE", credentials.passphrase},
