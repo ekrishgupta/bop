@@ -65,13 +65,13 @@ public:
 
 class AlgoManager {
   // Concrete containers for high-performance static dispatch
-  std::vector<std::unique_ptr<TWAPAlgo>> twap_algos;
-  std::vector<std::unique_ptr<TrailingStopAlgo>> trailing_algos;
-  std::vector<std::unique_ptr<PegAlgo>> peg_algos;
-  std::vector<std::unique_ptr<VWAPAlgo>> vwap_algos;
-  std::vector<std::unique_ptr<ArbitrageAlgo>> arb_algos;
-  std::vector<std::unique_ptr<MarketMakerAlgo>> mm_algos;
-  std::vector<std::unique_ptr<SORAlgo>> sor_algos;
+  std::vector<TWAPAlgo> twap_algos;
+  std::vector<TrailingStopAlgo> trailing_algos;
+  std::vector<PegAlgo> peg_algos;
+  std::vector<VWAPAlgo> vwap_algos;
+  std::vector<ArbitrageAlgo> arb_algos;
+  std::vector<MarketMakerAlgo> mm_algos;
+  std::vector<SORAlgo> sor_algos;
 
   // Generic strategies still use the virtual interface but are optimized via
   // CRTP where possible
@@ -84,6 +84,18 @@ class AlgoManager {
   std::vector<std::unique_ptr<ExecutionStrategy>> pending_strategies;
 
 public:
+  AlgoManager() {
+    twap_algos.reserve(1024);
+    trailing_algos.reserve(1024);
+    peg_algos.reserve(1024);
+    vwap_algos.reserve(1024);
+    arb_algos.reserve(1024);
+    mm_algos.reserve(1024);
+    sor_algos.reserve(1024);
+    pending_orders.reserve(1024);
+    pending_strategies.reserve(256);
+  }
+
   void submit(const Order &o) {
     std::lock_guard<std::mutex> lock(mtx);
     pending_orders.push_back(o);
@@ -102,29 +114,28 @@ public:
       for (const auto &o : pending_orders) {
         switch (o.algo_type) {
         case AlgoType::TWAP:
-          twap_algos.push_back(std::make_unique<TWAPAlgo>(o));
+          twap_algos.emplace_back(o);
           break;
         case AlgoType::Trailing:
-          trailing_algos.push_back(std::make_unique<TrailingStopAlgo>(o));
+          trailing_algos.emplace_back(o);
           break;
         case AlgoType::Peg:
-          peg_algos.push_back(std::make_unique<PegAlgo>(o));
+          peg_algos.emplace_back(o);
           break;
         case AlgoType::VWAP:
-          vwap_algos.push_back(std::make_unique<VWAPAlgo>(o));
+          vwap_algos.emplace_back(o);
           break;
         case AlgoType::Arbitrage: {
           auto data = std::get<ArbData>(o.algo_params);
-          arb_algos.push_back(std::make_unique<ArbitrageAlgo>(
-              o.market, o.backend, data.m2, data.b2, data.min_profit,
-              o.quantity));
+          arb_algos.emplace_back(o.market, o.backend, data.m2, data.b2,
+                                 data.min_profit, o.quantity);
           break;
         }
         case AlgoType::MarketMaker:
-          mm_algos.push_back(std::make_unique<MarketMakerAlgo>(o));
+          mm_algos.emplace_back(o);
           break;
         case AlgoType::SOR:
-          sor_algos.push_back(std::make_unique<SORAlgo>(o));
+          sor_algos.emplace_back(o);
           break;
         default:
           break;
@@ -183,11 +194,10 @@ public:
 
 private:
   template <typename T>
-  void tick_container(std::vector<std::unique_ptr<T>> &container,
-                      ExecutionEngine &engine) {
+  void tick_container(std::vector<T> &container, ExecutionEngine &engine) {
     for (size_t i = 0; i < container.size();) {
       // Direct call via CRTP/Static dispatch
-      if (container[i]->tick_impl(engine)) {
+      if (container[i].tick_impl(engine)) {
         std::swap(container[i], container.back());
         container.pop_back();
       } else {
