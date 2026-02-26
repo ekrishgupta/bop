@@ -408,11 +408,12 @@ struct ExecutionEngine {
 
 struct LiveEngineState {
   Price balance{0};
+  Price exposure{0};
+  Price pnl{0};
   std::unordered_map<uint32_t, int64_t> positions;
 };
 
 class LiveExecutionEngine : public ExecutionEngine {
-  mutable std::mutex mtx;
   std::shared_ptr<const LiveEngineState> current_state;
   std::thread sync_thread;
   std::condition_variable tick_cv;
@@ -432,12 +433,7 @@ public:
   void run() override;
 
   std::unordered_map<uint32_t, int64_t> get_positions_map() const {
-    std::shared_ptr<const LiveEngineState> state;
-    {
-      std::lock_guard<std::mutex> lock(mtx);
-      state = current_state;
-    }
-    return state->positions;
+    return std::atomic_load(&current_state)->positions;
   }
 
 private:
