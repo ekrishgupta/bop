@@ -414,7 +414,7 @@ struct LiveEngineState {
 };
 
 class LiveExecutionEngine : public ExecutionEngine {
-  std::shared_ptr<const LiveEngineState> current_state;
+  std::atomic<std::shared_ptr<const LiveEngineState>> current_state;
   std::thread sync_thread;
   std::condition_variable tick_cv;
   std::mutex tick_mtx;
@@ -433,7 +433,7 @@ public:
   void run() override;
 
   std::unordered_map<uint32_t, int64_t> get_positions_map() const {
-    return std::atomic_load(&current_state)->positions;
+    return current_state.load()->positions;
   }
 
 private:

@@ -73,18 +73,18 @@ LiveExecutionEngine::~LiveExecutionEngine() {
 }
 
 int64_t LiveExecutionEngine::get_position(MarketId market) const {
-  auto state = std::atomic_load(&current_state);
+  auto state = current_state.load();
   auto it = state->positions.find(market.hash);
   return (it != state->positions.end()) ? it->second : 0;
 }
 
 Price LiveExecutionEngine::get_balance() const {
-  return std::atomic_load(&current_state)->balance;
+  return current_state.load()->balance;
 }
 
 double
 LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
-  auto state = std::atomic_load(&current_state);
+  auto state = current_state.load();
   std::unordered_map<uint32_t, double> volatilities;
   for (auto const &[hash, tracker] : market_volatility) {
     volatilities[hash] = tracker.current_vol;
@@ -113,11 +113,9 @@ LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
 }
 
 Price LiveExecutionEngine::get_exposure() const {
-  return std::atomic_load(&current_state)->exposure;
+  return current_state.load()->exposure;
 }
-Price LiveExecutionEngine::get_pnl() const {
-  return std::atomic_load(&current_state)->pnl;
-}
+Price LiveExecutionEngine::get_pnl() const { return current_state.load()->pnl; }
 
 void LiveExecutionEngine::run() {
   is_running = true;
@@ -176,8 +174,8 @@ void LiveExecutionEngine::sync_state() {
   new_state->exposure = total_exposure;
   new_state->pnl = Price(current_daily_pnl_raw.load());
 
-  std::atomic_store(&current_state, std::shared_ptr<const LiveEngineState>(
-                                        std::move(new_state)));
+  current_state.store(
+      std::shared_ptr<const LiveEngineState>(std::move(new_state)));
 }
 
 // --- StreamingMarketBackend ---
