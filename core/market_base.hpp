@@ -6,8 +6,8 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 namespace bop {
 
@@ -19,38 +19,40 @@ struct OrderBookLevel {
 };
 
 struct SuperMarket {
-    std::string ticker;
-    struct Entry {
-        MarketId market;
-        const MarketBackend* backend;
-    };
-    std::vector<Entry> entries;
+  std::string ticker;
+  struct Entry {
+    MarketId market;
+    const MarketBackend *backend;
+  };
+  std::vector<Entry> entries;
 };
 
 class MarketRegistry {
 public:
-    static void Register(const std::string& super_ticker, MarketId mkt, const MarketBackend& backend) {
-        instance().markets[super_ticker].ticker = super_ticker;
-        instance().markets[super_ticker].entries.push_back({mkt, &backend});
-    }
+  static void Register(const std::string &super_ticker, MarketId mkt,
+                       const MarketBackend &backend) {
+    instance().markets[super_ticker].ticker = super_ticker;
+    instance().markets[super_ticker].entries.push_back({mkt, &backend});
+  }
 
-    static const SuperMarket* Get(const std::string& super_ticker) {
-        auto it = instance().markets.find(super_ticker);
-        if (it != instance().markets.end()) return &it->second;
-        return nullptr;
-    }
+  static const SuperMarket *Get(const std::string &super_ticker) {
+    auto it = instance().markets.find(super_ticker);
+    if (it != instance().markets.end())
+      return &it->second;
+    return nullptr;
+  }
 
 private:
-    static MarketRegistry& instance() {
-        static MarketRegistry reg;
-        return reg;
-    }
-    std::unordered_map<std::string, SuperMarket> markets;
+  static MarketRegistry &instance() {
+    static MarketRegistry reg;
+    return reg;
+  }
+  std::unordered_map<std::string, SuperMarket> markets;
 };
 
 struct OrderBook {
-  std::vector<OrderBookLevel> bids;
-  std::vector<OrderBookLevel> asks;
+  std::map<Price, int64_t, std::greater<Price>> bids;
+  std::map<Price, int64_t, std::less<Price>> asks;
   int64_t last_update_id = 0; // Sequence number for incremental updates
 };
 
@@ -83,7 +85,7 @@ struct MarketBackend {
 
   virtual std::string resolve_ticker(const std::string &ticker) const {
     if (ticker_to_id.empty()) {
-        const_cast<MarketBackend *>(this)->sync_markets();
+      const_cast<MarketBackend *>(this)->sync_markets();
     }
 
     // 1. Exact match
@@ -94,12 +96,15 @@ struct MarketBackend {
 
     // 2. Case-insensitive search
     std::string upper_ticker = ticker;
-    for (auto &c : upper_ticker) c = toupper(c);
-    
-    for (auto const& [key, val] : ticker_to_id) {
-        std::string upper_key = key;
-        for (auto &c : upper_key) c = toupper(c);
-        if (upper_key == upper_ticker) return val;
+    for (auto &c : upper_ticker)
+      c = toupper(c);
+
+    for (auto const &[key, val] : ticker_to_id) {
+      std::string upper_key = key;
+      for (auto &c : upper_key)
+        c = toupper(c);
+      if (upper_key == upper_ticker)
+        return val;
     }
 
     return ticker;

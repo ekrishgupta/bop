@@ -1,10 +1,10 @@
 #include "bop.hpp"
 #include "core/algo.hpp"
+#include "exchanges/betfair/betfair.hpp"
+#include "exchanges/gnosis/gnosis.hpp"
 #include "exchanges/kalshi/kalshi.hpp"
 #include "exchanges/polymarket/polymarket.hpp"
 #include "exchanges/predictit/predictit.hpp"
-#include "exchanges/betfair/betfair.hpp"
-#include "exchanges/gnosis/gnosis.hpp"
 #include <iostream>
 #include <thread>
 
@@ -341,7 +341,7 @@ void streaming_demo() {
   kalshi.ws_subscribe_orderbook(MarketId("BTC"), [](const OrderBook &ob) {
     if (!ob.bids.empty()) {
       std::cout << "[CALLBACK] Kalshi BTC Book Update -> Best Bid: "
-                << ob.bids[0].price << std::endl;
+                << ob.bids.begin()->first << std::endl;
     }
   });
 
@@ -360,28 +360,20 @@ int main() {
   std::cout << "--- BOP Production Strategy Engine ---" << std::endl;
 
   // 1. Initialize Credentials and Backends from Environment Variables
-  const char* k_key = std::getenv("KALSHI_API_KEY");
-  const char* k_sec = std::getenv("KALSHI_SECRET_KEY");
-  const char* k_pas = std::getenv("KALSHI_PASSPHRASE");
-  
-  kalshi.set_credentials({
-    k_key ? k_key : "",
-    k_sec ? k_sec : "",
-    k_pas ? k_pas : "",
-    ""
-  });
+  const char *k_key = std::getenv("KALSHI_API_KEY");
+  const char *k_sec = std::getenv("KALSHI_SECRET_KEY");
+  const char *k_pas = std::getenv("KALSHI_PASSPHRASE");
 
-  const char* p_key = std::getenv("POLY_API_KEY");
-  const char* p_sec = std::getenv("POLY_PRIVATE_KEY");
-  const char* p_pas = std::getenv("POLY_PASSPHRASE");
-  const char* p_adr = std::getenv("POLY_ADDRESS");
+  kalshi.set_credentials(
+      {k_key ? k_key : "", k_sec ? k_sec : "", k_pas ? k_pas : "", ""});
 
-  polymarket.set_credentials({
-    p_key ? p_key : "",
-    p_sec ? p_sec : "",
-    p_pas ? p_pas : "",
-    p_adr ? p_adr : ""
-  });
+  const char *p_key = std::getenv("POLY_API_KEY");
+  const char *p_sec = std::getenv("POLY_PRIVATE_KEY");
+  const char *p_pas = std::getenv("POLY_PASSPHRASE");
+  const char *p_adr = std::getenv("POLY_ADDRESS");
+
+  polymarket.set_credentials({p_key ? p_key : "", p_sec ? p_sec : "",
+                              p_pas ? p_pas : "", p_adr ? p_adr : ""});
 
   // 2. Register backends with the Execution Engine
   RealLiveExchange.register_backend(&kalshi);
@@ -412,16 +404,16 @@ int main() {
   arb_strategy >> LiveExchange;
 
   // Strategy B: Risk-Gated Market Making
-  auto risk_strategy =
-      When(Exposure() < 50000 && Market("ETH", polymarket).Spread() < 5_ticks) >>
-      (Buy(200_shares) / Market("ETH", polymarket) / YES +
-       Peg(Bid, Price(1_ticks)));
+  auto risk_strategy = When(Exposure() < 50000 &&
+                            Market("ETH", polymarket).Spread() < 5_ticks) >>
+                       (Buy(200_shares) / Market("ETH", polymarket) / YES +
+                        Peg(Bid, Price(1_ticks)));
   risk_strategy >> LiveExchange;
 
   // Strategy D: Order Lifecycle Management (Don't layer orders)
-  auto managed_strategy =
-      When(OpenOrders(Market("BTC", kalshi)).count() < 1) >>
-      (Buy(100_shares) / Market("BTC", kalshi) / YES + LimitPrice(Price(50_ticks)));
+  auto managed_strategy = When(OpenOrders(Market("BTC", kalshi)).count() < 1) >>
+                          (Buy(100_shares) / Market("BTC", kalshi) / YES +
+                           LimitPrice(Price(50_ticks)));
   managed_strategy >> LiveExchange;
 
   // Strategy C: Execution Algorithms (TWAP/VWAP)
@@ -437,9 +429,8 @@ int main() {
   fat_finger >> LiveExchange;
 
   // Strategy F: PredictIt Cross-Market Strategy
-  auto pi_strategy = 
-      When(Market("WH_Win", predictit).Price(YES) > 55_ticks) >>
-      (Sell(100) / Market("WH_Win", predictit) / YES);
+  auto pi_strategy = When(Market("WH_Win", predictit).Price(YES) > 55_ticks) >>
+                     (Sell(100) / Market("WH_Win", predictit) / YES);
   pi_strategy >> LiveExchange;
 
   std::cout << "[MAIN] Engine running with " << GlobalAlgoManager.active_count()
