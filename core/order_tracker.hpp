@@ -3,6 +3,7 @@
 #include "core.hpp"
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,14 @@ public:
       }
     }
     return count;
+  }
+
+  std::optional<OrderRecord> find(const std::string &id) {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = records.find(id);
+    if (it != records.end())
+      return it->second;
+    return std::nullopt;
   }
 
   std::vector<OrderRecord> get_all() {
