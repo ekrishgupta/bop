@@ -66,26 +66,38 @@ LiveExecutionEngine::~LiveExecutionEngine() {
 }
 
 int64_t LiveExecutionEngine::get_position(MarketId market) const {
-  std::lock_guard<std::mutex> lock(mtx);
-  auto it = cached_positions.find(market.hash);
-  return (it != cached_positions.end()) ? it->second : 0;
+  std::shared_ptr<const LiveEngineState> state;
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    state = current_state;
+  }
+  auto it = state->positions.find(market.hash);
+  return (it != state->positions.end()) ? it->second : 0;
 }
 
 Price LiveExecutionEngine::get_balance() const {
-  std::lock_guard<std::mutex> lock(mtx);
-  return cached_balance;
+  std::shared_ptr<const LiveEngineState> state;
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    state = current_state;
+  }
+  return state ? state->balance : Price(0);
 }
 
 double
 LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
-  std::lock_guard<std::mutex> lock(mtx);
+  std::shared_ptr<const LiveEngineState> state;
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    state = current_state;
+  }
   std::unordered_map<uint32_t, double> volatilities;
   for (auto const &[hash, tracker] : market_volatility) {
     volatilities[hash] = tracker.current_vol;
   }
 
   auto pg = const_cast<GreekEngine &>(greek_engine)
-                .calculate_portfolio_greeks(cached_positions, backends_,
+                .calculate_portfolio_greeks(state->positions, backends_,
                                             volatilities);
 
   switch (metric) {
@@ -100,7 +112,7 @@ LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
   case PortfolioQuery::Metric::NetExposure:
     return get_exposure().to_double();
   case PortfolioQuery::Metric::PortfolioValue:
-    return cached_balance.to_double();
+    return state ? state->balance.to_double() : 0.0;
   default:
     return 0.0;
   }
@@ -153,10 +165,13 @@ void LiveExecutionEngine::sync_state() {
     } catch (...) {
     }
   }
+  auto new_state = std::make_shared<LiveEngineState>();
+  new_state->balance = total_balance;
+  new_state->positions = std::move(new_positions);
+
   {
     std::lock_guard<std::mutex> lock(mtx);
-    cached_balance = total_balance;
-    cached_positions = std::move(new_positions);
+    current_state = std::move(new_state);
   }
 }
 
