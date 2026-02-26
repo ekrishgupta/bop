@@ -6,8 +6,7 @@
 namespace bop::exchanges {
 
 struct Kalshi : public StreamingMarketBackend {
-  Kalshi()
-      : StreamingMarketBackend(std::make_unique<LiveWebSocketClient>()) {
+  Kalshi() : StreamingMarketBackend(std::make_unique<LiveWebSocketClient>()) {
     if (ws_)
       ws_->connect("wss://api.elections.kalshi.com/trade-api/v2/stream");
   }
@@ -68,7 +67,35 @@ struct Kalshi : public StreamingMarketBackend {
   }
 
   OrderBook get_orderbook_http(MarketId market) const override {
-    return {{{Price::from_cents(50), 100}}, {{Price::from_cents(51), 100}}};
+    std::string resolved = resolve_ticker(market.ticker);
+    std::string url =
+        std::string("https://api.elections.kalshi.com/trade-api/v2/markets/") +
+        resolved + "/orderbook";
+    try {
+      auto resp = Network.get(url);
+      if (resp.status_code == 200) {
+        auto j = resp.json_body();
+        OrderBook ob;
+        if (j.contains("orderbook")) {
+          auto &book = j["orderbook"];
+          if (book.contains("bids")) {
+            for (auto &b : book["bids"]) {
+              ob.bids.push_back({Price::from_cents(b[0].get<int64_t>()),
+                                 static_cast<int>(b[1].get<int64_t>())});
+            }
+          }
+          if (book.contains("asks")) {
+            for (auto &a : book["asks"]) {
+              ob.asks.push_back({Price::from_cents(a[0].get<int64_t>()),
+                                 static_cast<int>(a[1].get<int64_t>())});
+            }
+          }
+        }
+        return ob;
+      }
+    } catch (...) {
+    }
+    return {};
   }
 
   Price get_depth(MarketId, bool) const override {
@@ -85,44 +112,96 @@ struct Kalshi : public StreamingMarketBackend {
     json j;
     j["id"] = 1;
     j["cmd"] = "subscribe";
-    j["params"]["channels"] = {"ticker"};
+    j["params"]["channels"] = {"ticker", "orderbook"};
     j["params"]["market_tickers"] = {resolve_ticker(market.ticker)};
     ws_->send(j.dump());
   }
 
   void handle_message(std::string_view msg) override {
     try {
-      simdjson::ondemand::document doc = parser_.iterate(msg.data(), msg.size(), msg.size());
+      simdjson::ondemand::document doc =
+          parser_.iterate(msg.data(), msg.size(), msg.size());
       std::string_view type;
       auto error = doc["type"].get(type);
-      if (error) return;
+      if (error)
+        return;
 
       if (type == "ticker") {
         auto m = doc["msg"];
         std::string_view ticker;
         int64_t last_price;
-        if (!m["market_ticker"].get(ticker) && !m["last_price"].get(last_price)) {
-            update_price(MarketId(ticker), Price::from_cents(last_price),
-                         Price::from_cents(100 - last_price));
+        if (!m["market_ticker"].get(ticker) &&
+            !m["last_price"].get(last_price)) {
+          update_price(MarketId(ticker), Price::from_cents(last_price),
+                       Price::from_cents(100 - last_price));
+        }
+      } else if (type == "orderbook_snapshot") {
+        auto m = doc["msg"];
+        std::string_view ticker;
+        if (!m["market_ticker"].get(ticker)) {
+          OrderBook ob;
+          auto bids = m["bids"];
+          for (auto item : bids) {
+            int64_t price, qty;
+            auto arr = item.get_array();
+            auto it = arr.begin();
+            (*it).get(price);
+            (++it)->get(qty);
+            ob.bids.push_back(
+                {Price::from_cents(price), static_cast<int>(qty)});
+          }
+          auto asks = m["asks"];
+          for (auto item : asks) {
+            int64_t price, qty;
+            auto arr = item.get_array();
+            auto it = arr.begin();
+            (*it).get(price);
+            (++it)->get(qty);
+            ob.asks.push_back(
+                {Price::from_cents(price), static_cast<int>(qty)});
+          }
+          update_orderbook(MarketId(ticker), ob);
+        }
+      } else if (type == "orderbook_delta") {
+        auto m = doc["msg"];
+        std::string_view ticker;
+        if (!m["market_ticker"].get(ticker)) {
+          // Kalshi V2 deltas are usually full updates for the changed levels
+          // We can use update_orderbook_incremental if we want to be precise,
+          // but for simplicity let's handle them as updates.
+          auto delta = m["delta"];
+          int64_t price, qty;
+          std::string_view side;
+          if (!m["price"].get(price) && !m["delta"].get(qty) &&
+              !m["side"].get(side)) {
+            update_orderbook_incremental(
+                MarketId(ticker), side == "yes",
+                {Price::from_cents(price), static_cast<int>(qty)});
+          }
         }
       } else if (type == "fill") {
         auto m = doc["msg"];
         std::string_view order_id;
         int64_t qty;
         int64_t price_cents;
-        if (!m["order_id"].get(order_id) && !m["count"].get(qty) && !m["price"].get(price_cents)) {
-            notify_fill(std::string(order_id), static_cast<int>(qty), Price::from_cents(price_cents));
+        if (!m["order_id"].get(order_id) && !m["count"].get(qty) &&
+            !m["price"].get(price_cents)) {
+          notify_fill(std::string(order_id), static_cast<int>(qty),
+                      Price::from_cents(price_cents));
         }
       } else if (type == "order_status_change") {
         auto m = doc["msg"];
         std::string_view order_id;
         std::string_view status_str;
         if (!m["order_id"].get(order_id) && !m["status"].get(status_str)) {
-            OrderStatus status = OrderStatus::Open;
-            if (status_str == "canceled") status = OrderStatus::Cancelled;
-            else if (status_str == "rejected") status = OrderStatus::Rejected;
-            else if (status_str == "filled") status = OrderStatus::Filled;
-            notify_status(std::string(order_id), status);
+          OrderStatus status = OrderStatus::Open;
+          if (status_str == "canceled")
+            status = OrderStatus::Cancelled;
+          else if (status_str == "rejected")
+            status = OrderStatus::Rejected;
+          else if (status_str == "filled")
+            status = OrderStatus::Filled;
+          notify_status(std::string(order_id), status);
         }
       }
     } catch (...) {
