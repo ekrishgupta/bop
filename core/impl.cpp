@@ -27,7 +27,14 @@ void ExecutionEngine::execute_order(const Order &o) {
   }
 }
 
-void ExecutionEngine::execute_cancel(const std::string &id) {}
+void ExecutionEngine::execute_cancel(const std::string &id) {
+  auto record = order_store.find(id);
+  if (record && record->order.backend) {
+    if (record->order.backend->cancel_order(id)) {
+      update_order_status(id, OrderStatus::Cancelled);
+    }
+  }
+}
 
 void ExecutionEngine::execute_batch(const std::vector<Order> &orders) {
   for (const auto &o : orders)
@@ -66,31 +73,18 @@ LiveExecutionEngine::~LiveExecutionEngine() {
 }
 
 int64_t LiveExecutionEngine::get_position(MarketId market) const {
-  std::shared_ptr<const LiveEngineState> state;
-  {
-    std::lock_guard<std::mutex> lock(mtx);
-    state = current_state;
-  }
+  auto state = current_state.load();
   auto it = state->positions.find(market.hash);
   return (it != state->positions.end()) ? it->second : 0;
 }
 
 Price LiveExecutionEngine::get_balance() const {
-  std::shared_ptr<const LiveEngineState> state;
-  {
-    std::lock_guard<std::mutex> lock(mtx);
-    state = current_state;
-  }
-  return state ? state->balance : Price(0);
+  return current_state.load()->balance;
 }
 
 double
 LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
-  std::shared_ptr<const LiveEngineState> state;
-  {
-    std::lock_guard<std::mutex> lock(mtx);
-    state = current_state;
-  }
+  auto state = current_state.load();
   std::unordered_map<uint32_t, double> volatilities;
   for (auto const &[hash, tracker] : market_volatility) {
     volatilities[hash] = tracker.current_vol;
@@ -112,14 +106,16 @@ LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
   case PortfolioQuery::Metric::NetExposure:
     return get_exposure().to_double();
   case PortfolioQuery::Metric::PortfolioValue:
-    return state ? state->balance.to_double() : 0.0;
+    return state->balance.to_double();
   default:
     return 0.0;
   }
 }
 
-Price LiveExecutionEngine::get_exposure() const { return Price(0); }
-Price LiveExecutionEngine::get_pnl() const { return Price(0); }
+Price LiveExecutionEngine::get_exposure() const {
+  return current_state.load()->exposure;
+}
+Price LiveExecutionEngine::get_pnl() const { return current_state.load()->pnl; }
 
 void LiveExecutionEngine::run() {
   is_running = true;
@@ -145,6 +141,7 @@ void LiveExecutionEngine::run() {
 
 void LiveExecutionEngine::sync_state() {
   Price total_balance(0);
+  Price total_exposure(0);
   std::unordered_map<uint32_t, int64_t> new_positions;
   for (auto b : backends_) {
     total_balance = total_balance + b->get_balance();
@@ -157,8 +154,14 @@ void LiveExecutionEngine::sync_state() {
           if (p.contains("asset_id"))
             ticker = p["asset_id"];
           if (!ticker.empty() && p.contains("size")) {
-            new_positions[fnv1a(ticker.c_str())] +=
-                std::stoll(p["size"].get<std::string>());
+            int64_t size = std::stoll(p["size"].get<std::string>());
+            new_positions[fnv1a(ticker.c_str())] += size;
+
+            // Calculate exposure
+            Price mid = b->get_price(MarketId(ticker), true);
+            if (mid.raw > 0) {
+              total_exposure.raw += std::abs(size) * mid.raw;
+            }
           }
         }
       }
@@ -168,11 +171,10 @@ void LiveExecutionEngine::sync_state() {
   auto new_state = std::make_shared<LiveEngineState>();
   new_state->balance = total_balance;
   new_state->positions = std::move(new_positions);
+  new_state->exposure = total_exposure;
+  new_state->pnl = Price(current_daily_pnl_raw.load());
 
-  {
-    std::lock_guard<std::mutex> lock(mtx);
-    current_state = std::move(new_state);
-  }
+  current_state.store(std::move(new_state));
 }
 
 // --- StreamingMarketBackend ---
@@ -192,6 +194,47 @@ void StreamingMarketBackend::update_orderbook(MarketId market,
   {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     orderbook_cache_[market.hash] = ob;
+  }
+  if (engine_)
+    engine_->trigger_tick();
+}
+
+void StreamingMarketBackend::update_orderbook_incremental(
+    MarketId market, bool is_bid, const OrderBookLevel &level) {
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto &ob = orderbook_cache_[market.hash];
+    auto &target = is_bid ? ob.bids : ob.asks;
+
+    auto it = std::find_if(target.begin(), target.end(),
+                           [&](const OrderBookLevel &l) {
+                             return l.price.raw == level.price.raw;
+                           });
+
+    if (it != target.end()) {
+      // level.quantity is the DELTA in Kalshi, but usually it's the NEW total.
+      // For standard incremental feeds, it's the NEW quantity.
+      // If it's 0, the level is removed.
+      if (level.quantity <= 0) {
+        target.erase(it);
+      } else {
+        it->quantity = level.quantity;
+      }
+    } else if (level.quantity > 0) {
+      target.push_back(level);
+      // Re-sort bids descending, asks ascending
+      if (is_bid) {
+        std::sort(target.begin(), target.end(),
+                  [](const auto &a, const auto &b) {
+                    return a.price.raw > b.price.raw;
+                  });
+      } else {
+        std::sort(target.begin(), target.end(),
+                  [](const auto &a, const auto &b) {
+                    return a.price.raw < b.price.raw;
+                  });
+      }
+    }
   }
   if (engine_)
     engine_->trigger_tick();
