@@ -127,6 +127,7 @@ struct MarketBackend {
   virtual std::vector<Candlestick> get_candlesticks(MarketId market) const {
     return {};
   }
+  virtual int64_t get_volume(MarketId market) const { return 0; }
   virtual std::string get_market_details(MarketId market) const { return ""; }
   virtual std::vector<std::string> list_markets() const { return {}; }
   virtual std::vector<std::string> list_events() const { return {}; }
