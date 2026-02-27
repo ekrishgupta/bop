@@ -281,6 +281,40 @@ struct ExecutionEngine {
       }
     }
 
+    // 4. Greek Limits
+    std::unordered_map<uint32_t, double> volatilities;
+    for (auto const &[hash, tracker] : market_volatility) {
+      volatilities[hash] = tracker.current_vol;
+    }
+
+    auto positions = get_all_positions();
+    auto pg =
+        const_cast<GreekEngine &>(greek_engine)
+            .calculate_portfolio_greeks(positions, backends_, volatilities);
+
+    Greeks mg = const_cast<GreekEngine &>(greek_engine)
+                    .calculate_market_greeks(o.market, backends_, volatilities);
+    double qty = (o.is_buy ? (double)o.quantity : -(double)o.quantity);
+    double incremental_delta = mg.delta * qty;
+    double incremental_gamma = mg.gamma * qty;
+
+    double new_delta = pg.total_delta + incremental_delta;
+    double new_gamma = pg.total_gamma + incremental_gamma;
+
+    if (std::abs(new_delta) > limits.max_net_delta) {
+      std::cerr << "[RISK] REJECT: Max Delta exceeded. Current: "
+                << pg.total_delta << ", New: " << new_delta
+                << " (Limit: " << limits.max_net_delta << ")" << std::endl;
+      return false;
+    }
+
+    if (std::abs(new_gamma) > limits.max_gamma) {
+      std::cerr << "[RISK] REJECT: Max Gamma exceeded. Current: "
+                << pg.total_gamma << ", New: " << new_gamma
+                << " (Limit: " << limits.max_gamma << ")" << std::endl;
+      return false;
+    }
+
     return true;
   }
 
