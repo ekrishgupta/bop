@@ -218,7 +218,7 @@ public:
 
 private:
   template <typename T>
-  void tick_container(std::vector<T> &container, ExecutionEngine &engine) {
+  void tick_container(std::pmr::vector<T> &container, ExecutionEngine &engine) {
     for (size_t i = 0; i < container.size();) {
       // Direct call via CRTP/Static dispatch
       if (container[i].tick_impl(engine)) {
