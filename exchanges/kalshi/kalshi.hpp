@@ -28,6 +28,10 @@ struct Kalshi : public StreamingMarketBackend {
             // For now, just store ticker -> ticker to satisfy the requirement
             // of having it in the map.
             ticker_to_id[ticker] = ticker;
+
+            if (m.contains("volume")) {
+              update_volume(MarketId(ticker), m["volume"].get<int64_t>());
+            }
           }
         }
       }
@@ -134,6 +138,12 @@ struct Kalshi : public StreamingMarketBackend {
             !m["last_price"].get(last_price)) {
           update_price(MarketId(ticker), Price::from_cents(last_price),
                        Price::from_cents(100 - last_price));
+
+          // Try to get volume
+          int64_t volume;
+          if (!m["volume"].get(volume)) {
+            update_volume(MarketId(ticker), volume);
+          }
         }
       } else if (type == "orderbook_snapshot") {
         auto m = doc["msg"];
