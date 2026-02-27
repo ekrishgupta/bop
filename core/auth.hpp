@@ -364,12 +364,12 @@ inline int recover_v(const std::string &hash_bytes, const BIGNUM *r,
   return 27;
 }
 
-inline std::string sign_hash_array(const std::string &private_key_hex,
+inline std::string sign_hash_array(std::string_view private_key_hex,
                                    const std::array<uint8_t, 32> &hash_bytes,
-                                   const std::string &expected_addr = "") {
+                                   std::string_view expected_addr = "") {
   std::array<uint8_t, 32> priv_bytes;
   priv_bytes.fill(0);
-  const char *str = private_key_hex.c_str();
+  const char *str = private_key_hex.data();
   size_t len = private_key_hex.length();
   if (len >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
     str += 2;
@@ -429,9 +429,9 @@ inline std::string sign_hash_array(const std::string &private_key_hex,
   return signature;
 }
 
-inline std::string sign_hash(const std::string &private_key_hex,
-                             const std::string &hash_bytes,
-                             const std::string &expected_addr) {
+inline std::string sign_hash(std::string_view private_key_hex,
+                             std::string_view hash_bytes,
+                             std::string_view expected_addr) {
   std::array<uint8_t, 32> arr;
   for (size_t i = 0; i < 32 && i < hash_bytes.size(); ++i) {
     arr[i] = static_cast<uint8_t>(hash_bytes[i]);

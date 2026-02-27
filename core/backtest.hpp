@@ -307,6 +307,7 @@ public:
 
   void update_market(const std::string &ticker, Price yes, Price no) {
     MarketId mkt(ticker.c_str());
+    market_volatility[mkt.hash].add_price(yes);
     for (auto b : backends_) {
       if (auto bb = dynamic_cast<BacktestMarketBackend *>(
               const_cast<MarketBackend *>(b))) {
