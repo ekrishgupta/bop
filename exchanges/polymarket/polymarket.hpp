@@ -48,6 +48,15 @@ struct Polymarket : public StreamingMarketBackend {
               }
             }
           }
+
+          if (m.contains("volume")) {
+            if (m["volume"].is_string())
+              update_volume(MarketId(slug),
+                            static_cast<int64_t>(
+                                std::stod(m["volume"].get<std::string>())));
+            else
+              update_volume(MarketId(slug), m["volume"].get<int64_t>());
+          }
         }
       }
     } catch (...) {
