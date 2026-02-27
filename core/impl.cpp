@@ -63,6 +63,15 @@ void ExecutionEngine::add_order_fill(const std::string &id, int qty,
   check_kill_switch();
 }
 
+int64_t ExecutionEngine::get_volume(MarketId market) const {
+  for (auto b : backends_) {
+    int64_t v = b->get_volume(market);
+    if (v > 0)
+      return v;
+  }
+  return 0;
+}
+
 // --- LiveExecutionEngine ---
 
 LiveExecutionEngine::~LiveExecutionEngine() {
@@ -219,6 +228,15 @@ void StreamingMarketBackend::update_orderbook_incremental(
         ob.asks[level.price] = level.quantity;
       }
     }
+  }
+  if (engine_)
+    engine_->trigger_tick();
+}
+
+void StreamingMarketBackend::update_volume(MarketId market, int64_t volume) {
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    volume_cache_[market.hash] = volume;
   }
   if (engine_)
     engine_->trigger_tick();
