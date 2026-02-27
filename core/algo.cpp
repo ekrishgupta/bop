@@ -458,6 +458,9 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
       if (d1 + d2 > 0) {
         qty_b1 = static_cast<int>((total_qty * d1) / (d1 + d2));
         qty_b2 = total_qty - qty_b1;
+        std::cout << "[ALGO] SOR Liquidity-Aware Split: " << d1 << " vs " << d2
+                  << " (Routed " << qty_b1 << " / " << qty_b2 << ")"
+                  << std::endl;
       } else {
         qty_b1 = total_qty / 2;
         qty_b2 = total_qty - qty_b1;
@@ -482,6 +485,9 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
       if (d1 + d2 > 0) {
         qty_b1 = static_cast<int>((total_qty * d1) / (d1 + d2));
         qty_b2 = total_qty - qty_b1;
+        std::cout << "[ALGO] SOR Liquidity-Aware Split: " << d1 << " vs " << d2
+                  << " (Routed " << qty_b1 << " / " << qty_b2 << ")"
+                  << std::endl;
       } else {
         qty_b1 = total_qty / 2;
         qty_b2 = total_qty - qty_b1;
