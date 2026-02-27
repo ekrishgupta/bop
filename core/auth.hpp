@@ -464,11 +464,10 @@ inline std::string sign_hash(std::string_view private_key_hex,
 struct PolySigner {
   // Polymarket requires EIP-712 or personal_sign.
   // This is a utility to sign a message using a secp256k1 private key.
-  static std::string sign(const std::string &private_key_hex,
-                          const std::string &address_hex,
-                          const std::string &timestamp,
-                          const std::string &method, const std::string &path,
-                          const std::string &body = "") {
+  static std::string sign(std::string_view private_key_hex,
+                          std::string_view address_hex,
+                          std::string_view timestamp, std::string_view method,
+                          std::string_view path, std::string_view body = "") {
     static const auto domainSeparator = [] {
       std::string typeHash_Domain = keccak::hash(
           "EIP712Domain(string name,string version,uint256 chainId)");
@@ -493,37 +492,41 @@ struct PolySigner {
       return arr;
     }();
 
-    auto addrEncoded = encode_address_array(address_hex);
-    auto tsHash = keccak::hash_array(
-        reinterpret_cast<const uint8_t *>(timestamp.data()), timestamp.size());
-    auto mHash = keccak::hash_array(
-        reinterpret_cast<const uint8_t *>(method.data()), method.size());
-    auto pHash = keccak::hash_array(
-        reinterpret_cast<const uint8_t *>(path.data()), path.size());
-    auto bHash = keccak::hash_array(
-        reinterpret_cast<const uint8_t *>(body.data()), body.size());
+    uint8_t structData[32 * 6];
 
-    std::array<uint8_t, 32 * 6> structData;
-    auto copy32 = [](uint8_t *dst, const std::array<uint8_t, 32> &src) {
-      for (int i = 0; i < 32; ++i)
-        dst[i] = src[i];
-    };
-    copy32(structData.data(), typeHash_ClobAuth);
-    copy32(structData.data() + 32, addrEncoded);
-    copy32(structData.data() + 64, tsHash);
-    copy32(structData.data() + 96, mHash);
-    copy32(structData.data() + 128, pHash);
-    copy32(structData.data() + 160, bHash);
+    // Field 0: typeHash
+    std::memcpy(structData, typeHash_ClobAuth.data(), 32);
 
-    auto structHash = keccak::hash_array(structData.data(), structData.size());
+    // Field 1: address
+    encode_address_to(address_hex, structData + 32);
 
-    std::array<uint8_t, 2 + 32 + 32> finalData;
+    // Field 2: timestamp hash
+    keccak::hash_to(reinterpret_cast<const uint8_t *>(timestamp.data()),
+                    timestamp.size(), structData + 64);
+
+    // Field 3: method hash
+    keccak::hash_to(reinterpret_cast<const uint8_t *>(method.data()),
+                    method.size(), structData + 96);
+
+    // Field 4: path hash
+    keccak::hash_to(reinterpret_cast<const uint8_t *>(path.data()), path.size(),
+                    structData + 128);
+
+    // Field 5: body hash
+    keccak::hash_to(reinterpret_cast<const uint8_t *>(body.data()), body.size(),
+                    structData + 160);
+
+    uint8_t structHash[32];
+    keccak::hash_to(structData, sizeof(structData), structHash);
+
+    uint8_t finalData[2 + 32 + 32];
     finalData[0] = 0x19;
     finalData[1] = 0x01;
-    copy32(finalData.data() + 2, domainSeparator);
-    copy32(finalData.data() + 34, structHash);
+    std::memcpy(finalData + 2, domainSeparator.data(), 32);
+    std::memcpy(finalData + 34, structHash, 32);
 
-    auto finalHash = keccak::hash_array(finalData.data(), finalData.size());
+    std::array<uint8_t, 32> finalHash;
+    keccak::hash_to(finalData, sizeof(finalData), finalHash.data());
 
     return eth::sign_hash_array(private_key_hex, finalHash, address_hex);
   }
