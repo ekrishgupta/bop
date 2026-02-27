@@ -107,9 +107,20 @@ public:
     pending_orders.push_back(o);
   }
 
+  template <typename T, typename... Args> T *create_strategy(Args &&...args) {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::pmr::polymorphic_allocator<T> alloc(&pool_resource);
+    T *s = alloc.new_object<T>(std::forward<Args>(args)...);
+    pending_strategies.push_back(s);
+    return s;
+  }
+
+  // Deprecated: uses heap allocation. Migrating to create_strategy.
   void submit_strategy(std::unique_ptr<ExecutionStrategy> s) {
     std::lock_guard<std::mutex> lock(mtx);
-    pending_strategies.push_back(std::move(s));
+    // We still support this by taking ownership, but it's not zero-allocation
+    // unless the caller uses PMR.
+    pending_strategies.push_back(s.release());
   }
 
   void tick(ExecutionEngine &engine) {
@@ -151,8 +162,8 @@ public:
     }
 
     if (!pending_strategies.empty()) {
-      for (auto &s : pending_strategies)
-        active_strategies.push_back(std::move(s));
+      for (auto s : pending_strategies)
+        active_strategies.push_back(s);
       pending_strategies.clear();
     }
 
@@ -168,6 +179,8 @@ public:
     // Optimized Strategy Loop
     for (size_t i = 0; i < active_strategies.size();) {
       if (active_strategies[i]->tick(engine)) {
+        // Since we use PMR, we manually call the destructor
+        active_strategies[i]->~ExecutionStrategy();
         std::swap(active_strategies[i], active_strategies.back());
         active_strategies.pop_back();
       } else {
