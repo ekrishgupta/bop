@@ -66,30 +66,35 @@ public:
 };
 
 class AlgoManager {
-  // Concrete containers for high-performance static dispatch
-  std::vector<TWAPAlgo> twap_algos;
-  std::vector<TrailingStopAlgo> trailing_algos;
-  std::vector<PegAlgo> peg_algos;
-  std::vector<VWAPAlgo> vwap_algos;
-  std::vector<ArbitrageAlgo> arb_algos;
-  std::vector<MarketMakerAlgo> mm_algos;
-  std::vector<SORAlgo> sor_algos;
-
   // Genetic strategies use PMR for zero-allocation lifecycle
-  alignas(std::max_align_t) std::array<std::byte, 4096 * 256> pool_buffer;
+  alignas(std::max_align_t) std::array<std::byte, 1024 * 1024 * 4> pool_buffer;
   std::pmr::monotonic_buffer_resource pool_resource;
+
+  // Concrete containers using PMR for zero-allocation resizing
+  std::pmr::vector<TWAPAlgo> twap_algos;
+  std::pmr::vector<TrailingStopAlgo> trailing_algos;
+  std::pmr::vector<PegAlgo> peg_algos;
+  std::pmr::vector<VWAPAlgo> vwap_algos;
+  std::pmr::vector<ArbitrageAlgo> arb_algos;
+  std::pmr::vector<MarketMakerAlgo> mm_algos;
+  std::pmr::vector<SORAlgo> sor_algos;
+
   std::pmr::vector<ExecutionStrategy *> active_strategies;
 
   std::mutex mtx;
 
   // Pending queues
-  std::vector<Order> pending_orders;
+  std::pmr::vector<Order> pending_orders;
   std::pmr::vector<ExecutionStrategy *> pending_strategies;
 
 public:
   AlgoManager()
       : pool_resource(pool_buffer.data(), pool_buffer.size()),
-        active_strategies(&pool_resource), pending_strategies(&pool_resource) {
+        twap_algos(&pool_resource), trailing_algos(&pool_resource),
+        peg_algos(&pool_resource), vwap_algos(&pool_resource),
+        arb_algos(&pool_resource), mm_algos(&pool_resource),
+        sor_algos(&pool_resource), active_strategies(&pool_resource),
+        pending_orders(&pool_resource), pending_strategies(&pool_resource) {
     twap_algos.reserve(1024);
     trailing_algos.reserve(1024);
     peg_algos.reserve(1024);
