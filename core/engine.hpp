@@ -40,6 +40,10 @@ struct RiskLimits {
   double max_drawdown_percent = 0.10; // 10% from peak
   double max_correlation_threshold = 0.85;
 
+  // Greek Limits
+  double max_net_delta = 5000.0;
+  double max_gamma = 1000.0;
+
   // Dynamic Position Sizing
   bool dynamic_sizing_enabled = false;
   double risk_per_trade_percent = 0.02; // Risk 2% of equity per trade
@@ -400,7 +404,7 @@ struct ExecutionEngine {
     return best_price;
   }
 
-  virtual int64_t get_volume(MarketId market) const { return 0; }
+  virtual int64_t get_volume(MarketId market) const;
 
   virtual void run();
   virtual void trigger_tick() {}
