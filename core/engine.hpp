@@ -324,6 +324,26 @@ struct ExecutionEngine {
                 << Price(current_daily_pnl_raw.load())
                 << "). Activating kill-switch." << std::endl;
       stop();
+      return;
+    }
+
+    if (limits.circuit_breakers_enabled) {
+      std::unordered_map<uint32_t, double> volatilities;
+      for (auto const &[hash, tracker] : market_volatility) {
+        volatilities[hash] = tracker.current_vol;
+      }
+      auto positions = get_all_positions();
+      auto pg =
+          const_cast<GreekEngine &>(greek_engine)
+              .calculate_portfolio_greeks(positions, backends_, volatilities);
+
+      if (std::abs(pg.total_delta) > limits.max_net_delta ||
+          std::abs(pg.total_gamma) > limits.max_gamma) {
+        std::cerr << "[RISK] CRITICAL: Greek limits exceeded (Delta: "
+                  << pg.total_delta << ", Gamma: " << pg.total_gamma
+                  << "). Activating kill-switch." << std::endl;
+        stop();
+      }
     }
   }
 
