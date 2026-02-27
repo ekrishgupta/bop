@@ -449,6 +449,12 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
       OrderBook ob1 = b1->get_orderbook(parent_order.market);
       OrderBook ob2 = b2->get_orderbook(parent_order.market);
 
+      int64_t d1 = 0, d2 = 0;
+      if (ob1.asks.count(p1))
+        d1 = ob1.asks[p1];
+      if (ob2.asks.count(p2))
+        d2 = ob2.asks[p2];
+
       qty_b1 = total_qty / 2;
       qty_b2 = total_qty - qty_b1;
     }
