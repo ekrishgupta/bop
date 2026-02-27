@@ -158,10 +158,13 @@ struct BacktestMarketBackend : public MarketBackend {
         if (slippage_model_.use_sqrt_law && slippage_model_.daily_volume > 0) {
           double q = static_cast<double>(order.quantity);
           double v = slippage_model_.daily_volume;
-          double s = slippage_model_.sigma;
 
-          // Current volatility estimate (could be improved with historical
-          // lookback)
+          // Use dynamic rolling volatility from the engine if available,
+          // otherwise fall back to static sigma
+          double s = engine->market_volatility[order.market.hash].current_vol;
+          if (s == 0)
+            s = slippage_model_.sigma;
+
           double impact_pct = s * std::sqrt(q / v);
 
           if (order.is_buy)
