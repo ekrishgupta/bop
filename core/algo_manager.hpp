@@ -75,18 +75,21 @@ class AlgoManager {
   std::vector<MarketMakerAlgo> mm_algos;
   std::vector<SORAlgo> sor_algos;
 
-  // Generic strategies still use the virtual interface but are optimized via
-  // CRTP where possible
-  std::vector<std::unique_ptr<ExecutionStrategy>> active_strategies;
+  // Genetic strategies use PMR for zero-allocation lifecycle
+  alignas(std::max_align_t) std::array<std::byte, 4096 * 256> pool_buffer;
+  std::pmr::monotonic_buffer_resource pool_resource;
+  std::pmr::vector<ExecutionStrategy *> active_strategies;
 
   std::mutex mtx;
 
   // Pending queues
   std::vector<Order> pending_orders;
-  std::vector<std::unique_ptr<ExecutionStrategy>> pending_strategies;
+  std::pmr::vector<ExecutionStrategy *> pending_strategies;
 
 public:
-  AlgoManager() {
+  AlgoManager()
+      : pool_resource(pool_buffer.data(), pool_buffer.size()),
+        active_strategies(&pool_resource), pending_strategies(&pool_resource) {
     twap_algos.reserve(1024);
     trailing_algos.reserve(1024);
     peg_algos.reserve(1024);
@@ -95,6 +98,7 @@ public:
     mm_algos.reserve(1024);
     sor_algos.reserve(1024);
     pending_orders.reserve(1024);
+    active_strategies.reserve(256);
     pending_strategies.reserve(256);
   }
 
