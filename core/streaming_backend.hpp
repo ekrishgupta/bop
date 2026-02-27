@@ -50,6 +50,17 @@ public:
     return get_price_http(market, outcome_yes);
   }
 
+  int64_t get_volume(MarketId market) const override {
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+      auto it = volume_cache_.find(market.hash);
+      if (it != volume_cache_.end()) {
+        return it->second;
+      }
+    }
+    return 0; // Or fetch from HTTP if needed
+  }
+
   // Virtual fallbacks to be implemented by child or remain as defaults
   virtual Price get_price_http(MarketId market, bool outcome_yes) const {
     return Price(0);
@@ -99,6 +110,7 @@ protected:
   void update_orderbook(MarketId market, const OrderBook &ob);
   void update_orderbook_incremental(MarketId market, bool is_bid,
                                     const OrderBookLevel &level);
+  void update_volume(MarketId market, int64_t volume);
 
   void notify_fill(const std::string &id, int qty, Price price);
   void notify_status(const std::string &id, OrderStatus status);
@@ -114,6 +126,7 @@ protected:
   };
   mutable std::map<uint32_t, PricePair> price_cache_;
   mutable std::map<uint32_t, OrderBook> orderbook_cache_;
+  mutable std::map<uint32_t, int64_t> volume_cache_;
   mutable std::map<uint32_t, std::function<void(const OrderBook &)>> callbacks_;
   mutable std::map<uint32_t, MarketId> active_subscriptions_;
 };
