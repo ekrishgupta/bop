@@ -58,9 +58,9 @@ struct VolatilityTracker {
   std::deque<double> returns;
   size_t window_size = 20;
   double current_vol = 0.0;
+  Price last_p = Price(0);
 
   void add_price(Price p) {
-    static Price last_p = Price(0);
     if (last_p.raw > 0) {
       double ret =
           std::abs(p.to_double() - last_p.to_double()) / last_p.to_double();
@@ -301,6 +301,40 @@ struct ExecutionEngine {
     return const_cast<ExecutionEngine *>(this)->order_store.count_open(market);
   }
 
+  virtual std::unordered_map<uint32_t, int64_t> get_all_positions() const {
+    std::unordered_map<uint32_t, int64_t> total;
+    for (auto b : backends_) {
+      std::string pos_json = b->get_positions();
+      try {
+        auto j = nlohmann::json::parse(pos_json);
+        if (j.contains("positions")) {
+          for (const auto &p : j["positions"]) {
+            std::string ticker;
+            if (p.contains("ticker"))
+              ticker = p["ticker"];
+            else if (p.contains("market_ticker"))
+              ticker = p["market_ticker"];
+
+            if (!ticker.empty()) {
+              int64_t size = 0;
+              if (p.contains("size")) {
+                if (p["size"].is_string())
+                  size = std::stoll(p["size"].get<std::string>());
+                else
+                  size = p["size"].get<int64_t>();
+              } else if (p.contains("quantity")) {
+                size = p["quantity"].get<int64_t>();
+              }
+              total[fnv1a(ticker.c_str())] += size;
+            }
+          }
+        }
+      } catch (...) {
+      }
+    }
+    return total;
+  }
+
   virtual int64_t get_position(MarketId market) const {
     int64_t total = 0;
     for (auto b : backends_) {
@@ -436,7 +470,7 @@ public:
   double get_portfolio_metric(PortfolioQuery::Metric metric) const override;
   void run() override;
 
-  std::unordered_map<uint32_t, int64_t> get_positions_map() const {
+  std::unordered_map<uint32_t, int64_t> get_all_positions() const override {
     return current_state.load()->positions;
   }
 
