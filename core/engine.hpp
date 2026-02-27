@@ -540,8 +540,7 @@ inline void operator>>(const bop::ConditionalOrder<T> &co,
                        bop::ExecutionEngine &engine) {
   std::cout << "[STRATEGY] Registering persistent conditional order..."
             << std::endl;
-  bop::GlobalAlgoManager.submit_strategy(
-      std::make_unique<PersistentConditionalStrategy<T>>(co));
+  bop::GlobalAlgoManager.create_strategy<PersistentConditionalStrategy<T>>(co);
 }
 
 // Forward declare restored Operators
