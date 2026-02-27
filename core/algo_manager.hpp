@@ -2,8 +2,10 @@
 
 #include "algo.hpp"
 #include "core.hpp"
+#include <array>
 #include <functional>
 #include <memory>
+#include <memory_resource>
 #include <mutex>
 #include <vector>
 
