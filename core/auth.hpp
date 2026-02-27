@@ -528,11 +528,12 @@ struct PolySigner {
     return eth::sign_hash_array(private_key_hex, finalHash, address_hex);
   }
 
-  static std::string
-  sign_order(const std::string &private_key_hex, const std::string &address_hex,
-             const std::string &token_id, const std::string &price,
-             const std::string &size, const std::string &side,
-             const std::string &expiration, uint64_t nonce) {
+  static std::string sign_order(std::string_view private_key_hex,
+                                std::string_view address_hex,
+                                std::string_view token_id,
+                                std::string_view price, std::string_view size,
+                                std::string_view side,
+                                std::string_view expiration, uint64_t nonce) {
     static const auto domainSeparator = [] {
       std::string typeHash_Domain = keccak::hash(
           "EIP712Domain(string name,string version,uint256 chainId)");
@@ -559,60 +560,50 @@ struct PolySigner {
       return arr;
     }();
 
-    auto makerEncoded = encode_address_array(address_hex);
-    auto takerEncoded =
-        encode_address_array("0x0000000000000000000000000000000000000000");
+    uint8_t structData[32 * 11];
 
-    auto dec_to_array = [](const std::string &s) {
-      BIGNUM *bn = nullptr;
-      BN_dec2bn(&bn, s.c_str());
-      std::array<uint8_t, 32> res;
-      res.fill(0);
-      if (bn) {
-        BN_bn2binpad(bn, res.data(), 32);
-        BN_free(bn);
-      }
-      return res;
-    };
+    // Field 0: typeHash
+    std::memcpy(structData, typeHash_Order.data(), 32);
 
-    auto tokenEncoded = dec_to_array(token_id);
-    auto priceEncoded = dec_to_array(price);
-    auto amountEncoded = dec_to_array(size);
-    std::array<uint8_t, 32> sideEncoded;
-    sideEncoded.fill(0);
-    sideEncoded[31] = (side == "BUY" ? 0 : 1);
-    auto expEncoded = dec_to_array(expiration);
-    auto nonceEncoded = encode_uint256_array(nonce);
-    auto feeRateEncoded = encode_uint256_array(0); // Default to 0
-    auto saltEncoded =
-        encode_uint256_array(nonce); // Use nonce as salt for determinism
+    // Field 1: maker
+    encode_address_to(address_hex, structData + 32);
 
-    std::array<uint8_t, 32 * 11> structData;
-    auto copy32 = [](uint8_t *dst, const std::array<uint8_t, 32> &src) {
-      for (int i = 0; i < 32; ++i)
-        dst[i] = src[i];
-    };
-    copy32(structData.data(), typeHash_Order);
-    copy32(structData.data() + 32, makerEncoded);
-    copy32(structData.data() + 64, takerEncoded);
-    copy32(structData.data() + 96, tokenEncoded);
-    copy32(structData.data() + 128, priceEncoded);
-    copy32(structData.data() + 160, amountEncoded);
-    copy32(structData.data() + 192, sideEncoded);
-    copy32(structData.data() + 224, expEncoded);
-    copy32(structData.data() + 256, nonceEncoded);
-    copy32(structData.data() + 288, feeRateEncoded);
-    copy32(structData.data() + 320, saltEncoded);
+    // Field 2: taker (zero address)
+    encode_address_to("0x0000000000000000000000000000000000000000",
+                      structData + 64);
 
-    auto structHash = keccak::hash_array(structData.data(), structData.size());
+    // Field 3-5: tokenID, price, amount
+    dec_to_buffer(token_id, structData + 96);
+    dec_to_buffer(price, structData + 128);
+    dec_to_buffer(size, structData + 160);
 
-    std::array<uint8_t, 2 + 32 + 32> finalData;
+    // Field 6: side
+    std::memset(structData + 192, 0, 32);
+    structData[192 + 31] = (side == "BUY" ? 0 : 1);
+
+    // Field 7: expiration
+    dec_to_buffer(expiration, structData + 224);
+
+    // Field 8: nonce
+    encode_uint256_to(nonce, structData + 256);
+
+    // Field 9: feeRateBps
+    encode_uint256_to(0, structData + 288);
+
+    // Field 10: salt (using nonce as salt)
+    encode_uint256_to(nonce, structData + 320);
+
+    uint8_t structHash[32];
+    keccak::hash_to(structData, sizeof(structData), structHash);
+
+    uint8_t finalData[2 + 32 + 32];
     finalData[0] = 0x19;
     finalData[1] = 0x01;
-    copy32(finalData.data() + 2, domainSeparator);
-    copy32(finalData.data() + 34, structHash);
+    std::memcpy(finalData + 2, domainSeparator.data(), 32);
+    std::memcpy(finalData + 34, structHash, 32);
 
-    auto finalHash = keccak::hash_array(finalData.data(), finalData.size());
+    std::array<uint8_t, 32> finalHash;
+    keccak::hash_to(finalData, sizeof(finalData), finalHash.data());
 
     return eth::sign_hash_array(private_key_hex, finalHash, address_hex);
   }
