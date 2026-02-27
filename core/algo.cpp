@@ -458,6 +458,10 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
     } else if (p2 > p1) {
       qty_b2 = total_qty;
     } else {
+      // Same price, fetch order books for depth-based split
+      OrderBook ob1 = b1->get_orderbook(parent_order.market);
+      OrderBook ob2 = b2->get_orderbook(parent_order.market);
+
       qty_b1 = total_qty / 2;
       qty_b2 = total_qty - qty_b1;
     }
