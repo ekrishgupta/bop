@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <iomanip>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
@@ -60,12 +61,16 @@ inline std::string encode_uint256(uint64_t val) {
   return res;
 }
 
+inline void encode_uint256_to(uint64_t val, uint8_t *out) {
+  std::memset(out, 0, 32);
+  for (int i = 0; i < 8; ++i) {
+    out[31 - i] = static_cast<uint8_t>((val >> (i * 8)) & 0xFF);
+  }
+}
+
 inline std::array<uint8_t, 32> encode_uint256_array(uint64_t val) {
   std::array<uint8_t, 32> res;
-  res.fill(0);
-  for (int i = 0; i < 8; ++i) {
-    res[31 - i] = static_cast<uint8_t>((val >> (i * 8)) & 0xFF);
-  }
+  encode_uint256_to(val, res.data());
   return res;
 }
 
@@ -89,11 +94,9 @@ inline uint8_t hex_char_to_val(char c) {
   return 0;
 }
 
-inline std::array<uint8_t, 32>
-encode_address_array(const std::string &addr_hex) {
-  std::array<uint8_t, 32> res;
-  res.fill(0);
-  const char *str = addr_hex.c_str();
+inline void encode_address_to(std::string_view addr_hex, uint8_t *out) {
+  std::memset(out, 0, 32);
+  const char *str = addr_hex.data();
   size_t len = addr_hex.length();
   if (len >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
     str += 2;
@@ -104,9 +107,14 @@ encode_address_array(const std::string &addr_hex) {
     bytes_len = 32;
   size_t start = 32 - bytes_len;
   for (size_t i = 0; i < bytes_len; ++i) {
-    res[start + i] =
+    out[start + i] =
         (hex_char_to_val(str[2 * i]) << 4) | hex_char_to_val(str[2 * i + 1]);
   }
+}
+
+inline std::array<uint8_t, 32> encode_address_array(std::string_view addr_hex) {
+  std::array<uint8_t, 32> res;
+  encode_address_to(addr_hex, res.data());
   return res;
 }
 
