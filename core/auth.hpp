@@ -211,7 +211,7 @@ static void keccakf(uint64_t state[25]) {
 }
 
 // Array-based hash function to eliminate std::string allocations
-inline std::array<uint8_t, 32> hash_array(const uint8_t *data, size_t len) {
+inline void hash_to(const uint8_t *data, size_t len, uint8_t *out) {
   uint64_t state[25] = {0};
   size_t rate = 136;
   size_t pos = 0;
@@ -229,12 +229,16 @@ inline std::array<uint8_t, 32> hash_array(const uint8_t *data, size_t len) {
   state[(rate - 1) / 8] ^= 0x80ULL << (8 * ((rate - 1) % 8));
   keccakf(state);
 
-  std::array<uint8_t, 32> res;
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 8; ++j) {
-      res[i * 8 + j] = static_cast<uint8_t>((state[i] >> (8 * j)) & 0xFF);
+      out[i * 8 + j] = static_cast<uint8_t>((state[i] >> (8 * j)) & 0xFF);
     }
   }
+}
+
+inline std::array<uint8_t, 32> hash_array(const uint8_t *data, size_t len) {
+  std::array<uint8_t, 32> res;
+  hash_to(data, len, res.data());
   return res;
 }
 
