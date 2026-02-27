@@ -118,6 +118,27 @@ inline std::array<uint8_t, 32> encode_address_array(std::string_view addr_hex) {
   return res;
 }
 
+// Encodes a decimal string to a 32-byte big-endian buffer
+inline void dec_to_buffer(std::string_view s, uint8_t *out) {
+  std::memset(out, 0, 32);
+  if (s.empty())
+    return;
+  BIGNUM *bn = nullptr;
+  // BN_dec2bn needs null termination
+  char stack_buf[128];
+  if (s.size() < sizeof(stack_buf)) {
+    std::memcpy(stack_buf, s.data(), s.size());
+    stack_buf[s.size()] = '\0';
+    BN_dec2bn(&bn, stack_buf);
+  } else {
+    BN_dec2bn(&bn, std::string(s).c_str());
+  }
+  if (bn) {
+    BN_bn2binpad(bn, out, 32);
+    BN_free(bn);
+  }
+}
+
 inline std::string to_base64(const unsigned char *data, size_t len) {
   BIO *bio, *b64;
   BUF_MEM *bufferPtr;
