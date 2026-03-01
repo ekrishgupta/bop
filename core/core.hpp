@@ -156,6 +156,17 @@ struct Order {
         backend(nullptr) {}
 };
 
+/**
+ * @brief Template wrapper for Order to preserve backend type information
+ * for compile-time capability checks.
+ */
+template <typename B = MarketBackend> struct DetailedOrder : public Order {
+  using BackendType = B;
+  DetailedOrder(Order &&o) : Order(std::move(o)) {}
+  DetailedOrder(const Order &o) : Order(o) {}
+  DetailedOrder() = default;
+};
+
 // Action Types
 struct Buy {
   Shares quantity;
