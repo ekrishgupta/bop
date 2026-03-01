@@ -19,9 +19,107 @@ struct OpenOrdersTag {};
 struct PortfolioTag {};
 struct TimeTag {};
 
+struct RiskAction {
+  enum class Type { CancelAll, ClosePositions, Composite };
+  Type type;
+  std::vector<Type> sub_actions;
+};
+
+inline RiskAction CancelAll() { return {RiskAction::Type::CancelAll}; }
+inline RiskAction ClosePositions() {
+  return {RiskAction::Type::ClosePositions};
+}
+
+inline RiskAction operator|(RiskAction a, RiskAction b) {
+  RiskAction r{RiskAction::Type::Composite};
+  if (a.type == RiskAction::Type::Composite)
+    r.sub_actions = a.sub_actions;
+  else
+    r.sub_actions.push_back(a.type);
+  if (b.type == RiskAction::Type::Composite)
+    r.sub_actions.insert(r.sub_actions.end(), b.sub_actions.begin(),
+                         b.sub_actions.end());
+  else
+    r.sub_actions.push_back(b.type);
+  return r;
+}
+
+struct RiskViolationTrigger {};
+inline RiskViolationTrigger OnRiskViolation() { return {}; }
+
+struct StrategyProxy {
+  template <typename T> void invariant(T &&condition);
+};
+extern StrategyProxy Strategy;
+
 struct RiskQuery {
   enum class Type { Exposure, PnL };
   Type type;
+};
+
+// --- Stateful Strategy Triggers ---
+struct Trigger {
+  virtual ~Trigger() = default;
+  virtual bool evaluate(const ExecutionEngine &engine) = 0;
+  virtual bool is_recurring() const { return false; }
+};
+
+struct OnFillTrigger : public Trigger {
+  std::string order_id;
+  bool filled = false;
+  OnFillTrigger(std::string id) : order_id(std::move(id)) {}
+  bool evaluate(const ExecutionEngine &engine) override;
+};
+
+struct TimerTrigger : public Trigger {
+  std::chrono::system_clock::time_point next_trigger;
+  std::chrono::milliseconds interval;
+  bool recurring;
+  TimerTrigger(std::chrono::milliseconds d, bool r = false)
+      : interval(d), recurring(r) {
+    next_trigger = std::chrono::system_clock::now() + d;
+  }
+  bool evaluate(const ExecutionEngine &engine) override {
+    auto now = std::chrono::system_clock::now();
+    if (now >= next_trigger) {
+      if (recurring) {
+        next_trigger = now + interval;
+      }
+      return true;
+    }
+    return false;
+  }
+  bool is_recurring() const override { return recurring; }
+};
+
+// --- Stateful Strategy Actions ---
+struct Action {
+  virtual ~Action() = default;
+  virtual void execute(ExecutionEngine &engine) = 0;
+};
+
+struct OrderAction : public Action {
+  Order order;
+  OrderAction(Order o) : order(std::move(o)) {}
+  void execute(ExecutionEngine &engine) override;
+};
+
+struct CancelAction : public Action {
+  std::string order_id;
+  CancelAction(std::string id) : order_id(std::move(id)) {}
+  void execute(ExecutionEngine &engine) override;
+};
+
+struct CallbackAction : public Action {
+  std::function<void(ExecutionEngine &)> callback;
+  CallbackAction(std::function<void(ExecutionEngine &)> cb)
+      : callback(std::move(cb)) {}
+  void execute(ExecutionEngine &engine) override { callback(engine); }
+};
+
+struct WorkflowStep {
+  std::shared_ptr<Trigger> trigger;
+  std::shared_ptr<Action> action;
 };
 
 struct BalanceQuery {};
@@ -356,6 +454,17 @@ template <typename T> struct ConditionalOrder {
   ConditionalOrder(T c, const Order &o) : condition(std::move(c)), order(o) {}
 };
 
+template <typename T> struct Shadow_t {
+  T condition;
+};
+
+template <typename T> inline Shadow_t<T> Shadow(T cond) { return {cond}; }
+
+template <typename T>
+inline ConditionalOrder<T> operator|(Order o, Shadow_t<T> s) {
+  return {std::move(s.condition), std::move(o)};
+}
+
 template <typename T> struct WhenBinder {
   T condition;
 };
@@ -512,6 +621,21 @@ inline Condition<PnLTag, RiskQuery> PnL() {
   return {{RiskQuery::Type::PnL}, 0, false};
 }
 
+inline Condition<PositionTag> MaxPosition(int64_t shares) {
+  return Condition<PositionTag>(MarketQuery<PositionTag>{MarketId(0), true},
+                                shares, false);
+}
+
+inline Condition<PnLTag, RiskQuery> DailyLossLimit(Price p) {
+  return Condition<PnLTag, RiskQuery>(RiskQuery{RiskQuery::Type::PnL}, -p.raw,
+                                      true);
+}
+
+inline Condition<ExposureTag, RiskQuery> MaxExposure(Price p) {
+  return Condition<ExposureTag, RiskQuery>(RiskQuery{RiskQuery::Type::Exposure},
+                                           p.raw, false);
+}
+
 inline bop::Spread Spread(Price p) { return bop::Spread(p); }
 inline bop::Offset Offset(ReferencePrice r) { return bop::Offset(r); }
 
@@ -589,6 +713,45 @@ operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
 // Batch DSL Entry
 inline std::initializer_list<Order> Batch(std::initializer_list<Order> list) {
   return list;
+}
+
+// --- Stateful Strategy Helpers ---
+inline std::shared_ptr<Trigger> After(std::chrono::milliseconds d) {
+  return std::make_shared<TimerTrigger>(d, false);
+}
+
+inline std::shared_ptr<Trigger> Every(std::chrono::milliseconds d) {
+  return std::make_shared<TimerTrigger>(d, true);
+}
+
+inline std::shared_ptr<Trigger> OnFill(const Order &o) {
+  return std::make_shared<OnFillTrigger>(o.order_id);
+}
+
+inline std::shared_ptr<Trigger> OnFill(std::string order_id) {
+  return std::make_shared<OnFillTrigger>(std::move(order_id));
+}
+
+inline std::shared_ptr<Action> Cancel(std::string order_id) {
+  return std::make_shared<CancelAction>(std::move(order_id));
+}
+
+inline std::shared_ptr<Action> Cancel(const Order &o) {
+  return std::make_shared<CancelAction>(o.order_id);
+}
+
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t, Order o) {
+  return {t, std::make_shared<OrderAction>(std::move(o))};
+}
+
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
+                               std::function<void(ExecutionEngine &)> cb) {
+  return {t, std::make_shared<CallbackAction>(std::move(cb))};
+}
+
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
+                               std::shared_ptr<Action> a) {
+  return {t, a};
 }
 
 } // namespace bop
