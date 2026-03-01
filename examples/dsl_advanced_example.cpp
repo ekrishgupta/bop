@@ -29,15 +29,16 @@ int main() {
 
   // 1. Temporal Trigger: Refresh quoting every 1 second
   std::cout << "[DEMO] Setting up Every(1s) Quote..." << std::endl;
-  Every(1s) >> Quote(10) / Market("BTC") / YES >> engine;
+  Every(1s) >> Quote(Shares(10)) / Market("BTC") / YES >> engine;
 
   // 2. Chained Execution: Buy now, then Sell after fill
   // Note: In this mock, filling doesn't happen automatically unless we trigger
   // it.
   std::cout << "[DEMO] Setting up Chained execution (Buy -> Then Sell)..."
             << std::endl;
-  (When(Market("ETH").Midpoint() < 60_c) >> Buy(10) / Market("ETH") / YES) >>
-      Then(Sell(10) / Market("ETH") / YES) >> engine;
+  (When(Market("ETH").Midpoint() < 60_c) >>
+   Buy(Shares(10)) / Market("ETH") / YES) >>
+      (Sell(Shares(10)) / Market("ETH") / YES) >> engine;
 
   // 3. Fair Price Logic: Capture discrepancy
   std::cout << "[DEMO] Checking FairPrice logic..." << std::endl;
@@ -51,7 +52,7 @@ int main() {
 
   // 4. Proportional Sizing (Syntax test)
   std::cout << "[DEMO] Testing % sizing syntax..." << std::endl;
-  auto order = Buy(100) * 5_pct / Market("SOL") / YES;
+  auto order = Buy(Shares(100)) * 5_pct / Market("SOL") / YES;
   std::cout << "[INFO] Order created (sizing logic applied in engine hot-path)"
             << std::endl;
 

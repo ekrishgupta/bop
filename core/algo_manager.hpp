@@ -117,7 +117,7 @@ public:
   template <typename T, typename... Args> T *create_strategy(Args &&...args) {
     std::lock_guard<std::mutex> lock(mtx);
     std::pmr::polymorphic_allocator<T> alloc(&pool_resource);
-    T *s = alloc.new_object<T>(std::forward<Args>(args)...);
+    T *s = alloc.template new_object<T>(std::forward<Args>(args)...);
     pending_strategies.push_back(s);
     return s;
   }

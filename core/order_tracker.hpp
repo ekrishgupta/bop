@@ -44,7 +44,7 @@ public:
           r.avg_fill_price.to_double() * r.filled_qty + price.to_double() * qty;
       r.filled_qty += qty;
       r.avg_fill_price = Price::from_double(total_cost / r.filled_qty);
-      if (r.filled_qty >= r.order.quantity) {
+      if (Shares(r.filled_qty) >= r.order.quantity) {
         r.status = OrderStatus::Filled;
       } else {
         r.status = OrderStatus::PartiallyFilled;

@@ -94,46 +94,54 @@ struct TrailingStop {
 };
 
 // Order + LimitPrice -> Order
-inline Order &operator+(Order &o, LimitPrice lp) {
+template <typename B>
+inline DetailedOrder<B> &operator+(DetailedOrder<B> &o, LimitPrice lp) {
   o.price = lp.price;
   return o;
 }
-inline Order &&operator+(Order &&o, LimitPrice lp) {
+template <typename B>
+inline DetailedOrder<B> &&operator+(DetailedOrder<B> &&o, LimitPrice lp) {
   o.price = lp.price;
   return std::move(o);
 }
 
 // Order + MarketPrice -> Order
-inline Order &operator+(Order &o, MarketPrice) {
+template <typename B>
+inline DetailedOrder<B> &operator+(DetailedOrder<B> &o, MarketPrice) {
   o.price = Price(0);
   return o;
 }
-inline Order &&operator+(Order &&o, MarketPrice) {
+template <typename B>
+inline DetailedOrder<B> &&operator+(DetailedOrder<B> &&o, MarketPrice) {
   o.price = Price(0);
   return std::move(o);
 }
 
 // Order + Peg -> Order
-inline Order &operator+(Order &o, Peg p) {
+template <typename B>
+inline DetailedOrder<B> &operator+(DetailedOrder<B> &o, Peg p) {
   o.price = Price(0);
   o.algo_type = AlgoType::Peg;
-  o.algo_params = PegData{p.ref, p.offset};
+  o.algo_params = PegData{p.ref, p.offset, p.use_ticks};
   return o;
 }
-inline Order &&operator+(Order &&o, Peg p) {
+template <typename B>
+inline DetailedOrder<B> &&operator+(DetailedOrder<B> &&o, Peg p) {
   o.price = Price(0);
   o.algo_type = AlgoType::Peg;
-  o.algo_params = PegData{p.ref, p.offset};
+  o.algo_params = PegData{p.ref, p.offset, p.use_ticks};
   return std::move(o);
 }
 
 // Order + TrailingStop -> Order
-inline Order &operator+(Order &o, TrailingStop ts) {
+template <typename B>
+inline DetailedOrder<B> &operator+(DetailedOrder<B> &o, TrailingStop ts) {
   o.algo_type = AlgoType::Trailing;
   o.algo_params = ts.trail_amount.raw;
   return o;
 }
-inline Order &&operator+(Order &&o, TrailingStop ts) {
+template <typename B>
+inline DetailedOrder<B> &&operator+(DetailedOrder<B> &&o, TrailingStop ts) {
   o.algo_type = AlgoType::Trailing;
   o.algo_params = ts.trail_amount.raw;
   return std::move(o);

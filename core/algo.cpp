@@ -20,10 +20,10 @@ bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
   double elapsed_sec = (now_ns - start_time_ns) / 1e9;
 
   if (elapsed_sec >= duration_sec) {
-    int remaining = total_qty - filled_qty;
+    int remaining = total_qty.raw - filled_qty.raw;
     if (remaining > 0) {
-      dispatch_slice(remaining, engine);
-      filled_qty += remaining;
+      dispatch_slice(Shares(remaining), engine);
+      filled_qty += Shares(remaining);
     }
     std::cout << "[ALGO] TWAP Completed for " << parent_order.market.ticker
               << std::endl;
@@ -67,20 +67,21 @@ bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
 
   if (interval_passed) {
     double target_progress = (elapsed_sec / (double)duration_sec);
-    double target_qty = target_progress * total_qty * adaptive_multiplier;
+    double target_qty = target_progress * total_qty.raw * adaptive_multiplier;
 
     // Ensure we don't exceed total_qty or fall too far behind
-    int to_fill = static_cast<int>(target_qty) - filled_qty;
+    int to_fill = static_cast<int>(target_qty) - filled_qty.raw;
 
     // Minimum slice size to avoid too many small orders, but ensure we fill
     // eventually
     if (to_fill > 0 || elapsed_sec > duration_sec * 0.9) {
       to_fill = std::max(to_fill, 0);
-      to_fill = std::min(to_fill, total_qty - filled_qty);
+      to_fill =
+          std::min(to_fill, static_cast<int>(total_qty.raw - filled_qty.raw));
 
       if (to_fill > 0) {
-        dispatch_slice(to_fill, engine);
-        filled_qty += to_fill;
+        dispatch_slice(Shares(to_fill), engine);
+        filled_qty += Shares(to_fill);
         last_slice_time_ns = now_ns;
       }
     }
@@ -88,7 +89,7 @@ bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
   return false;
 }
 
-void TWAPAlgo::dispatch_slice(int qty, ExecutionEngine &engine) {
+void TWAPAlgo::dispatch_slice(Shares qty, ExecutionEngine &engine) {
   Order slice = parent_order;
   slice.quantity = qty;
   slice.algo_type = AlgoType::None;
@@ -227,7 +228,7 @@ VWAPAlgo::VWAPAlgo(const Order &o) {
 }
 
 bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
-  if (filled_qty >= total_qty) {
+  if (filled_qty.raw >= total_qty.raw) {
     std::cout << "[ALGO] VWAP Completed for " << parent_order.market.ticker
               << std::endl;
     return true;
@@ -241,7 +242,7 @@ bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
     return false;
   }
 
-  int64_t current_volume = engine.get_volume(parent_order.market);
+  int64_t current_volume = engine.get_volume(parent_order.market).raw;
   if (last_market_volume == -1) {
     last_market_volume = current_volume;
     last_slice_time_ns = now_ns;
@@ -255,11 +256,11 @@ bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
   }
 
   int to_fill = static_cast<int>(volume_delta * participation_rate);
-  to_fill = std::min(to_fill, total_qty - filled_qty);
+  to_fill = std::min(to_fill, static_cast<int>(total_qty.raw - filled_qty.raw));
 
   if (to_fill > 0) {
     Order slice = parent_order;
-    slice.quantity = to_fill;
+    slice.quantity = Shares(to_fill);
     slice.algo_type = AlgoType::None;
     if (slice.backend) {
       std::cout << "[ALGO] VWAP Slice: " << to_fill
@@ -267,7 +268,7 @@ bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
                 << ", Rate: " << participation_rate * 100 << "%)" << std::endl;
       slice.backend->create_order(slice);
     }
-    filled_qty += to_fill;
+    filled_qty += Shares(to_fill);
     last_slice_time_ns = now_ns;
   }
 
@@ -277,7 +278,8 @@ bool VWAPAlgo::tick_impl(ExecutionEngine &engine) {
 
 // ArbitrageAlgo Implementation
 ArbitrageAlgo::ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
-                             const MarketBackend *b2, Price min_profit, int qty)
+                             const MarketBackend *b2, Price min_profit,
+                             Shares qty)
     : m1(m1), m2(m2), b1(b1), b2(b2), min_profit(min_profit), quantity(qty) {}
 
 bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
@@ -297,10 +299,10 @@ bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b1->name() << " @ " << p1_yes
               << ", Sell " << b2->name() << " @ " << p2_yes << std::endl;
 
-    Order buy_o(m1, quantity, true, true, p1_yes, 0);
+    Order buy_o(m1, Shares(quantity), true, true, p1_yes, 0);
     buy_o.backend = b1;
 
-    Order sell_o(m2, quantity, false, true, p2_yes, 0);
+    Order sell_o(m2, Shares(quantity), false, true, p2_yes, 0);
     sell_o.backend = b2;
 
     buy_o >> engine;
@@ -315,10 +317,10 @@ bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b2->name() << " @ " << p2_yes
               << ", Sell " << b1->name() << " @ " << p1_yes << std::endl;
 
-    Order buy_o(m2, quantity, true, true, p2_yes, 0);
+    Order buy_o(m2, Shares(quantity), true, true, p2_yes, 0);
     buy_o.backend = b2;
 
-    Order sell_o(m1, quantity, false, true, p1_yes, 0);
+    Order sell_o(m1, Shares(quantity), false, true, p1_yes, 0);
     sell_o.backend = b1;
 
     buy_o >> engine;
@@ -441,9 +443,9 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
 
   if (parent_order.is_buy) {
     if (p1 < p2) {
-      qty_b1 = total_qty;
+      qty_b1 = total_qty.raw;
     } else if (p2 < p1) {
-      qty_b2 = total_qty;
+      qty_b2 = total_qty.raw;
     } else {
       // Same price, fetch order books for depth-based split
       OrderBook ob1 = b1->get_orderbook(parent_order.market);
@@ -456,21 +458,21 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
         d2 = ob2.asks[p2];
 
       if (d1 + d2 > 0) {
-        qty_b1 = static_cast<int>((total_qty * d1) / (d1 + d2));
-        qty_b2 = total_qty - qty_b1;
+        qty_b1 = static_cast<int>((total_qty.raw * d1) / (d1 + d2));
+        qty_b2 = total_qty.raw - qty_b1;
         std::cout << "[ALGO] SOR Liquidity-Aware Split: " << d1 << " vs " << d2
                   << " (Routed " << qty_b1 << " / " << qty_b2 << ")"
                   << std::endl;
       } else {
-        qty_b1 = total_qty / 2;
-        qty_b2 = total_qty - qty_b1;
+        qty_b1 = total_qty.raw / 2;
+        qty_b2 = total_qty.raw - qty_b1;
       }
     }
   } else {
     if (p1 > p2) {
-      qty_b1 = total_qty;
+      qty_b1 = total_qty.raw;
     } else if (p2 > p1) {
-      qty_b2 = total_qty;
+      qty_b2 = total_qty.raw;
     } else {
       // Same price, fetch order books for depth-based split
       OrderBook ob1 = b1->get_orderbook(parent_order.market);
@@ -483,21 +485,21 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
         d2 = ob2.bids[p2];
 
       if (d1 + d2 > 0) {
-        qty_b1 = static_cast<int>((total_qty * d1) / (d1 + d2));
-        qty_b2 = total_qty - qty_b1;
+        qty_b1 = static_cast<int>((total_qty.raw * d1) / (d1 + d2));
+        qty_b2 = total_qty.raw - qty_b1;
         std::cout << "[ALGO] SOR Liquidity-Aware Split: " << d1 << " vs " << d2
                   << " (Routed " << qty_b1 << " / " << qty_b2 << ")"
                   << std::endl;
       } else {
-        qty_b1 = total_qty / 2;
-        qty_b2 = total_qty - qty_b1;
+        qty_b1 = total_qty.raw / 2;
+        qty_b2 = total_qty.raw - qty_b1;
       }
     }
   }
 
   if (qty_b1 > 0) {
     Order o1 = parent_order;
-    o1.quantity = qty_b1;
+    o1.quantity = Shares(qty_b1);
     o1.backend = b1;
     o1.algo_type = AlgoType::None;
     b1->create_order(o1);
@@ -507,7 +509,7 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
 
   if (qty_b2 > 0) {
     Order o2 = parent_order;
-    o2.quantity = qty_b2;
+    o2.quantity = Shares(qty_b2);
     o2.backend = b2;
     o2.algo_type = AlgoType::None;
     b2->create_order(o2);

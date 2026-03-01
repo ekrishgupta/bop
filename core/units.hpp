@@ -52,6 +52,13 @@ template <typename Tag, typename T = int64_t> struct Quantity {
   constexpr bool operator!=(Quantity other) const { return raw != other.raw; }
 
   constexpr Quantity operator-() const { return Quantity(-raw); }
+
+  constexpr double to_double() const { return static_cast<double>(raw); }
+
+  friend std::ostream &operator<<(std::ostream &os, const Quantity &q) {
+    os << q.raw;
+    return os;
+  }
 };
 
 // Tags for different units

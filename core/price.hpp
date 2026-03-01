@@ -1,5 +1,6 @@
 #pragma once
 
+#include "units.hpp"
 #include <cstdint>
 
 #include <iostream>
@@ -17,6 +18,7 @@ struct Price {
 
   constexpr Price() : raw(0) {}
   constexpr explicit Price(int64_t r) : raw(r) {}
+  constexpr explicit Price(Quantity<TicksTag, int64_t> t) : raw(t.raw) {}
 
   static constexpr Price from_double(double d) {
     return Price(static_cast<int64_t>(d * SCALE + (d >= 0 ? 0.5 : -0.5)));

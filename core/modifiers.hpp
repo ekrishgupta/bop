@@ -60,113 +60,147 @@ struct StopLoss {
 };
 
 // TIF Modifiers
-inline Order &operator|(Order &o, IOC_t) {
+template <typename B>
+  requires IOCCapable<B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, IOC_t) {
   o.tif = TimeInForce::IOC;
   return o;
 }
-inline Order &&operator|(Order &&o, IOC_t) {
+template <typename B>
+  requires IOCCapable<B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, IOC_t) {
   o.tif = TimeInForce::IOC;
   return std::move(o);
 }
-inline Order &operator|(Order &o, GTC_t) {
+template <typename B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, GTC_t) {
   o.tif = TimeInForce::GTC;
   return o;
 }
-inline Order &&operator|(Order &&o, GTC_t) {
+template <typename B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, GTC_t) {
   o.tif = TimeInForce::GTC;
   return std::move(o);
 }
-inline Order &operator|(Order &o, FOK_t) {
+template <typename B>
+  requires FOKCapable<B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, FOK_t) {
   o.tif = TimeInForce::FOK;
   return o;
 }
-inline Order &&operator|(Order &&o, FOK_t) {
+template <typename B>
+  requires FOKCapable<B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, FOK_t) {
   o.tif = TimeInForce::FOK;
   return std::move(o);
 }
 
 // Algo Modifiers
-inline Order &operator|(Order &o, PostOnly_t) {
+template <typename B>
+  requires PostOnlyCapable<B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, PostOnly_t) {
   o.post_only = true;
   return o;
 }
-inline Order &&operator|(Order &&o, PostOnly_t) {
+template <typename B>
+  requires PostOnlyCapable<B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, PostOnly_t) {
   o.post_only = true;
   return std::move(o);
 }
-inline Order &operator|(Order &o, Iceberg ib) {
-  o.display_qty = ib.display_qty;
+template <typename B>
+  requires IcebergCapable<B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, Iceberg ib) {
+  o.display_qty = Shares(ib.display_qty);
   return o;
 }
-inline Order &&operator|(Order &&o, Iceberg ib) {
-  o.display_qty = ib.display_qty;
+template <typename B>
+  requires IcebergCapable<B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, Iceberg ib) {
+  o.display_qty = Shares(ib.display_qty);
   return std::move(o);
 }
-inline Order &operator|(Order &o, TWAP t) {
+template <typename B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, TWAP t) {
   o.algo_type = AlgoType::TWAP;
   o.algo_params = static_cast<int64_t>(t.duration.count());
   return o;
 }
-inline Order &&operator|(Order &&o, TWAP t) {
+template <typename B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, TWAP t) {
   o.algo_type = AlgoType::TWAP;
   o.algo_params = static_cast<int64_t>(t.duration.count());
   return std::move(o);
 }
-inline Order &operator|(Order &o, VWAP v) {
+template <typename B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, VWAP v) {
   o.algo_type = AlgoType::VWAP;
   o.algo_params = v.max_participation_rate;
   return o;
 }
-inline Order &&operator|(Order &&o, VWAP v) {
+template <typename B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, VWAP v) {
   o.algo_type = AlgoType::VWAP;
   o.algo_params = v.max_participation_rate;
   return std::move(o);
 }
-inline Order &operator|(Order &o, TrailingStop ts) {
+template <typename B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, TrailingStop ts) {
   o.algo_type = AlgoType::Trailing;
   o.algo_params = ts.trail_amount.raw;
   return o;
 }
-inline Order &&operator|(Order &&o, TrailingStop ts) {
+template <typename B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, TrailingStop ts) {
   o.algo_type = AlgoType::Trailing;
   o.algo_params = ts.trail_amount.raw;
   return std::move(o);
 }
 
 // Account Routing
-inline Order &operator|(Order &o, Account a) {
+template <typename B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, Account a) {
   o.account_hash = a.hash;
   return o;
 }
-inline Order &&operator|(Order &&o, Account a) {
+template <typename B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, Account a) {
   o.account_hash = a.hash;
   return std::move(o);
 }
 
 // STP Modifiers
-inline Order &operator|(Order &o, STP_t s) {
+template <typename B>
+  requires STPCapable<B>
+inline DetailedOrder<B> &operator|(DetailedOrder<B> &o, STP_t s) {
   o.stp = s.mode;
   return o;
 }
-inline Order &&operator|(Order &&o, STP_t s) {
+template <typename B>
+  requires STPCapable<B>
+inline DetailedOrder<B> &&operator|(DetailedOrder<B> &&o, STP_t s) {
   o.stp = s.mode;
   return std::move(o);
 }
 
 // Bracket Legs
-inline Order &operator&(Order &o, TakeProfit tp) {
+template <typename B>
+inline DetailedOrder<B> &operator&(DetailedOrder<B> &o, TakeProfit tp) {
   o.tp_price = tp.price;
   return o;
 }
-inline Order &&operator&(Order &&o, TakeProfit tp) {
+template <typename B>
+inline DetailedOrder<B> &&operator&(DetailedOrder<B> &&o, TakeProfit tp) {
   o.tp_price = tp.price;
   return std::move(o);
 }
-inline Order &operator&(Order &o, StopLoss sl) {
+template <typename B>
+inline DetailedOrder<B> &operator&(DetailedOrder<B> &o, StopLoss sl) {
   o.sl_price = sl.price;
   return o;
 }
-inline Order &&operator&(Order &&o, StopLoss sl) {
+template <typename B>
+inline DetailedOrder<B> &&operator&(DetailedOrder<B> &&o, StopLoss sl) {
   o.sl_price = sl.price;
   return std::move(o);
 }

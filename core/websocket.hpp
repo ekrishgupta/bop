@@ -274,7 +274,8 @@ private:
         // Re-initialize websocket stream to clear internal state
         // We need to recreate the stream because some beast states are sticky
         // after error
-        ws_ = websocket::stream<ssl::stream<beast::tcp_stream>>(
+        ws_.~stream();
+        new (&ws_) websocket::stream<ssl::stream<beast::tcp_stream>>(
             ioc_.get_executor(), ctx_);
         do_connect();
       }
