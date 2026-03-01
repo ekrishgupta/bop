@@ -96,9 +96,14 @@ enum class AlgoType : uint8_t {
   Shadow
 };
 
+struct TickOffset {
+  int64_t ticks;
+};
+
 struct PegData {
   ReferencePrice ref;
   Price offset;
+  bool use_ticks = false;
 };
 
 struct ArbData {
@@ -236,8 +241,8 @@ constexpr bop::Account operator""_acc(const char *str, size_t) {
   return bop::Account(bop::fnv1a(str));
 }
 
-constexpr int operator"" _shares(unsigned long long int v) {
-  return static_cast<int>(v);
+constexpr bop::Shares operator"" _shares(unsigned long long int v) {
+  return bop::Shares(static_cast<int64_t>(v));
 }
 
 constexpr bop::Price operator"" _usd(long double v) {
@@ -252,6 +257,6 @@ constexpr bop::Price operator"" _cents(unsigned long long int v) {
   return bop::Price::from_cents(static_cast<int64_t>(v));
 }
 
-constexpr int64_t operator"" _ticks(unsigned long long int v) {
-  return static_cast<int64_t>(v);
+constexpr bop::Ticks operator"" _ticks(unsigned long long int v) {
+  return bop::Ticks(static_cast<int64_t>(v));
 }
