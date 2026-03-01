@@ -22,6 +22,8 @@
 
 namespace bop {
 
+template <typename Tag> struct SyntheticMarketQuery;
+
 struct Command {
   enum class Type {
     SubmitOrder,
@@ -530,7 +532,7 @@ struct LiveEngineState {
 };
 
 class LiveExecutionEngine : public ExecutionEngine {
-  std::atomic<std::shared_ptr<const LiveEngineState>> current_state;
+  std::shared_ptr<const LiveEngineState> current_state;
   mutable std::mutex state_mtx;
   std::thread sync_thread;
   std::condition_variable tick_cv;
@@ -592,9 +594,9 @@ inline double get_query_value(const MarketQuery<Tag> &q) {
                          : LiveExchange.get_price(q.market, q.outcome_yes));
     return val.to_double();
   } else if constexpr (std::is_same_v<Tag, VolumeTag>) {
-    return (double)LiveExchange.get_volume(q.market);
+    return static_cast<double>(LiveExchange.get_volume(q.market).raw);
   } else if constexpr (std::is_same_v<Tag, PositionTag>) {
-    return (double)LiveExchange.get_position(q.market);
+    return static_cast<double>(LiveExchange.get_position(q.market).raw);
   }
   return 0.0;
 }
@@ -629,23 +631,24 @@ inline bool Condition<Tag, Q>::eval() const {
   } else {
     // Original logic for MarketQuery
     if constexpr (std::is_same_v<Tag, PositionTag>) {
-      val = (double)LiveExchange.get_position(query.market);
+      val = static_cast<double>(LiveExchange.get_position(query.market).raw);
     } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
-      val = (double)LiveExchange.get_balance().raw;
+      val = static_cast<double>(LiveExchange.get_balance().raw);
     } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
-      val = (double)LiveExchange.get_exposure().raw;
+      val = static_cast<double>(LiveExchange.get_exposure().raw);
     } else if constexpr (std::is_same_v<Tag, PnLTag>) {
-      val = (double)LiveExchange.get_pnl().raw;
+      val = static_cast<double>(LiveExchange.get_pnl().raw);
     } else if constexpr (std::is_same_v<Tag, PriceTag>) {
-      val = (double)(query.is_universal
-                         ? LiveExchange.get_universal_price(query.market,
-                                                            query.outcome_yes)
-                         : (query.backend
-                                ? query.backend->get_price(query.market,
-                                                           query.outcome_yes)
-                                : LiveExchange.get_price(query.market,
-                                                         query.outcome_yes)))
-                .raw;
+      Price p =
+          query.is_universal
+              ? LiveExchange.get_universal_price(query.market,
+                                                 query.outcome_yes)
+              : (query.backend
+                     ? query.backend->get_price(query.market, query.outcome_yes)
+                     : LiveExchange.get_price(query.market, query.outcome_yes));
+      val = static_cast<double>(p.raw);
+    } else if constexpr (std::is_same_v<Tag, VolumeTag>) {
+      val = static_cast<double>(LiveExchange.get_volume(query.market).raw);
     } else if constexpr (std::is_same_v<Tag, DepthTag>) {
       val = (double)(query.is_universal
                          ? LiveExchange.get_universal_depth(query.market,
@@ -727,16 +730,16 @@ class PersistentStrategy : public bop::ExecutionStrategy,
 
 public:
   PersistentStrategy(
-      std::pmr::memory_resource *mr = StrategyContext::instance().mr)
+      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
       : steps(mr) {}
   PersistentStrategy(WorkflowStep step, std::pmr::memory_resource *mr =
-                                            StrategyContext::instance().mr)
+                                            std::pmr::get_default_resource())
       : steps(mr) {
     steps.push_back(std::move(step));
   }
   PersistentStrategy(
       std::pmr::vector<WorkflowStep> s,
-      std::pmr::memory_resource *mr = StrategyContext::instance().mr)
+      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
       : steps(std::move(s)) {}
 
   void add_step(WorkflowStep step) {
@@ -833,20 +836,22 @@ template <> struct TriggerWrapper<TimerTrigger> : public Trigger {
   bool is_recurring() const override { return trigger.is_recurring(); }
 };
 
-inline void operator>>(WorkflowChain chain, ExecutionEngine &engine) {
+template <typename T>
+inline void operator>>(WorkflowChain<T> chain, ExecutionEngine &engine) {
   std::cout << "[WORKFLOW] Registering chained strategy..." << std::endl;
 
   auto p_strategy =
       GlobalAlgoManager.create_strategy<PersistentStrategy>(WorkflowStep{
-          std::make_shared<TriggerWrapper<decltype(chain.head.condition)>>(
-              std::move(chain.head.condition)),
+          std::make_shared<TriggerWrapper<T>>(std::move(chain.head.condition)),
           std::make_shared<OrderAction>(std::move(chain.head.order))});
 
   for (auto &action : chain.tail) {
     // Current PersistentStrategy is a simple concurrent-step runner.
     // For proper 'Chaining', we'd need a SequenceStrategy.
-    // Let's implement a simple SequenceStrategy in situ or just wrap it.
-    p_strategy->add_step({std::make_shared<OnFillTrigger>("any"), action});
+    // Hack for now: add them concurrently on same trigger
+    p_strategy->add_step(
+        {std::make_shared<TriggerWrapper<T>>(chain.head.condition),
+         std::move(action)});
   }
 }
 

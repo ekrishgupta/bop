@@ -63,8 +63,8 @@ void ExecutionEngine::execute_close_positions() {
       // Simple close: Market order in opposite direction
       Order close_order;
       close_order.market = MarketId(market_hash);
-      close_order.quantity = Shares(std::abs(qty.raw));
-      close_order.is_buy = (qty.raw < 0);
+      close_order.quantity = Shares(std::abs(qty));
+      close_order.is_buy = (qty < 0);
       close_order.outcome_yes = true; // Simplified
       close_order.backend = b;
       execute_order(close_order);
@@ -106,7 +106,7 @@ Shares ExecutionEngine::get_volume(MarketId market) const {
 // --- LiveExecutionEngine ---
 
 LiveExecutionEngine::~LiveExecutionEngine() {
-  stop();
+  ExecutionEngine::stop();
   if (sync_thread.joinable())
     sync_thread.join();
   tick_cv.notify_all();
@@ -222,6 +222,12 @@ void LiveExecutionEngine::sync_state() {
     } catch (...) {
     }
   }
+  auto new_state = std::make_shared<LiveEngineState>();
+  new_state->balance = total_balance;
+  new_state->positions = std::move(new_positions);
+  new_state->exposure = total_exposure;
+  new_state->pnl = Price(current_daily_pnl_raw.load());
+
   {
     std::lock_guard<std::mutex> lock(state_mtx);
     current_state = std::move(new_state);
@@ -231,6 +237,7 @@ void LiveExecutionEngine::sync_state() {
 // --- StreamingMarketBackend ---
 
 void StreamingMarketBackend::update_price(MarketId market, Price yes,
+
                                           Price no) {
   {
     std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -311,74 +318,13 @@ void PersistentStrategy::on_execution_event_impl(ExecutionEngine &,
   if (s == OrderStatus::Filled) {
     std::lock_guard<std::mutex> lock(steps_mtx);
     for (auto &step : steps) {
-      auto fill_trigger = dynamic_cast<OnFillTrigger *>(step.trigger);
+      auto fill_trigger = dynamic_cast<OnFillTrigger *>(step.trigger.get());
       if (fill_trigger &&
           (fill_trigger->order_id == id || fill_trigger->order_id == "any")) {
         fill_trigger->filled = true;
       }
     }
   }
-}
-
-bool BytecodeEvaluator::evaluate(ExecutionEngine &engine) const {
-  int64_t stack[64];
-  int sp = -1;
-  const Instruction *pc = code.data();
-  const Instruction *end = pc + code.size();
-
-  while (pc < end) {
-    switch (pc->op) {
-    case OpCode::LOAD_PRICE:
-      stack[++sp] = engine.get_price(MarketId(pc->arg), true).raw;
-      break;
-    case OpCode::LOAD_VOL:
-      stack[++sp] = engine.get_volume(MarketId(pc->arg));
-      break;
-    case OpCode::LOAD_POS:
-      stack[++sp] = engine.get_position(MarketId(pc->arg));
-      break;
-    case OpCode::LOAD_CONST:
-      stack[++sp] = constants[pc->arg];
-      break;
-    case OpCode::CMP_GT: {
-      int64_t rhs = stack[sp--];
-      int64_t lhs = stack[sp--];
-      stack[++sp] = (lhs > rhs);
-      break;
-    }
-    case OpCode::CMP_LT: {
-      int64_t rhs = stack[sp--];
-      int64_t lhs = stack[sp--];
-      stack[++sp] = (lhs < rhs);
-      break;
-    }
-    case OpCode::AND: {
-      int64_t rhs = stack[sp--];
-      int64_t lhs = stack[sp--];
-      stack[++sp] = (lhs && rhs);
-      break;
-    }
-    case OpCode::OR: {
-      int64_t rhs = stack[sp--];
-      int64_t lhs = stack[sp--];
-      stack[++sp] = (lhs || rhs);
-      break;
-    }
-    case OpCode::JUMP_IF_FALSE:
-      if (!stack[sp--]) {
-        pc += pc->arg;
-        continue;
-      }
-      break;
-    case OpCode::EXEC_ORDER:
-      engine.execute_order(orders[pc->arg]);
-      break;
-    case OpCode::HALT:
-      return true;
-    }
-    pc++;
-  }
-  return (sp >= 0) ? stack[sp] : false;
 }
 
 // --- Strategies ---
@@ -431,3 +377,6 @@ Order operator>>(MarketBoundQuote q, ExecutionEngine &engine) {
 }
 
 } // namespace bop
+
+bop::LiveExecutionEngine global_live_engine;
+bop::ExecutionEngine &LiveExchange = global_live_engine;
