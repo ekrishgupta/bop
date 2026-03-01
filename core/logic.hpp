@@ -23,6 +23,45 @@ struct FairPriceTag {};
 struct OpenOrdersTag {};
 struct PortfolioTag {};
 struct TimeTag {};
+struct TicksTag {};
+
+// Unit traits for Tags
+template <typename Tag> struct TagUnit {
+  using type = int64_t;
+};
+template <> struct TagUnit<PriceTag> {
+  using type = Price;
+};
+template <> struct TagUnit<VolumeTag> {
+  using type = Shares;
+};
+template <> struct TagUnit<PositionTag> {
+  using type = Shares;
+};
+template <> struct TagUnit<BalanceTag> {
+  using type = Price;
+};
+template <> struct TagUnit<PnLTag> {
+  using type = Price;
+};
+template <> struct TagUnit<ExposureTag> {
+  using type = Price;
+};
+template <> struct TagUnit<SpreadTag> {
+  using type = Price;
+};
+template <> struct TagUnit<DepthTag> {
+  using type = Shares;
+};
+template <> struct TagUnit<MidpointTag> {
+  using type = Price;
+};
+template <> struct TagUnit<FairPriceTag> {
+  using type = Price;
+};
+template <> struct TagUnit<TicksTag> {
+  using type = Ticks;
+};
 
 struct RiskAction {
   enum class Type { CancelAll, ClosePositions, Composite };
