@@ -112,7 +112,7 @@ protected:
                                     const OrderBookLevel &level);
   void update_volume(MarketId market, int64_t volume);
 
-  void notify_fill(const std::string &id, int qty, Price price);
+  void notify_fill(const std::string &id, Shares qty, Price price);
   void notify_status(const std::string &id, OrderStatus status);
 
   mutable std::mutex cache_mutex_;
