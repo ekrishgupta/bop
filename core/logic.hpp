@@ -538,10 +538,11 @@ class ExecutionEngine;
 inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine);
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
+  using Unit = typename TagUnit<Tag>::type;
   Q query;
-  int64_t threshold;
+  Unit threshold;
   bool is_greater;
-  Condition(Q q, int64_t t, bool g) : query(q), threshold(t), is_greater(g) {}
+  Condition(Q q, Unit t, bool g) : query(q), threshold(t), is_greater(g) {}
 
   bool eval() const;
 };
@@ -797,6 +798,38 @@ inline Condition<Tag, SyntheticMarketQuery<Tag>>
 operator<(SyntheticMarketQuery<Tag> q, Price threshold) {
   return {q, threshold.raw, false};
 }
+
+// --- DSL Bytecode VM ---
+enum class OpCode : uint8_t {
+  LOAD_PRICE, // arg: MarketHash
+  LOAD_VOL,   // arg: MarketHash
+  LOAD_POS,   // arg: MarketHash
+  LOAD_CONST, // arg: ConstantIndex
+  CMP_GT,
+  CMP_LT,
+  AND,
+  OR,
+  JUMP_IF_FALSE, // arg: Offset
+  EXEC_ORDER,    // arg: OrderIndex
+  HALT
+};
+
+struct Instruction {
+  OpCode op;
+  uint32_t arg;
+};
+
+struct BytecodeEvaluator {
+  std::pmr::vector<Instruction> code;
+  std::pmr::vector<int64_t> constants;
+  std::pmr::vector<Order> orders;
+
+  BytecodeEvaluator(
+      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
+      : code(mr), constants(mr), orders(mr) {}
+
+  bool evaluate(ExecutionEngine &engine) const;
+};
 
 // Global helper for DSL entry
 inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr, false}; }
