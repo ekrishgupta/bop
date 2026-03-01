@@ -3,6 +3,7 @@
 #include "core.hpp"
 #include "market_base.hpp"
 #include <functional>
+#include <immintrin.h>
 #include <memory_resource>
 #include <vector>
 
@@ -369,7 +370,7 @@ inline MarketBoundSpread operator/(const bop::Sell &s,
 }
 
 struct MarketBoundSpread {
-  int quantity;
+  Shares quantity;
   bool is_buy;
   SpreadTarget spread;
   int64_t timestamp_ns;
@@ -413,7 +414,7 @@ inline SORTarget operator|(const MarketTarget &a, const MarketTarget &b) {
 }
 
 struct SORBoundOrder {
-  int quantity;
+  Shares quantity;
   bool is_buy;
   SORTarget target;
   int64_t timestamp_ns;
@@ -452,7 +453,7 @@ inline Order operator/(const SORBoundOrder &m, NO_t) {
 }
 
 struct MarketBoundQuote {
-  int quantity;
+  Shares quantity;
   MarketId market;
   int64_t timestamp_ns;
   const MarketBackend *backend = nullptr;
@@ -504,6 +505,54 @@ template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   Condition(Q q, int64_t t, bool g) : query(q), threshold(t), is_greater(g) {}
 
   bool eval() const;
+};
+
+// SIMD Condition Batching
+struct PriceBatch {
+  static constexpr size_t kBatchSize = 4;
+  alignas(32) int64_t thresholds[kBatchSize];
+  alignas(32) int64_t results[kBatchSize];
+  uint32_t active_mask = 0;
+  bool is_greater[kBatchSize];
+
+  PriceBatch() {
+    for (size_t i = 0; i < kBatchSize; ++i) {
+      thresholds[i] = 0;
+      results[i] = 0;
+      is_greater[i] = true;
+    }
+  }
+
+  inline void add_condition(size_t idx, int64_t threshold, bool greater) {
+    if (idx < kBatchSize) {
+      thresholds[idx] = threshold;
+      is_greater[idx] = greater;
+      active_mask |= (1u << idx);
+    }
+  }
+
+  inline uint32_t evaluate_avx2(int64_t current_price) const {
+    __m256i current = _mm256_set1_epi64x(current_price);
+    __m256i thresh =
+        _mm256_load_si256(reinterpret_cast<const __m256i *>(thresholds));
+
+    // current > thresholds
+    __m256i gt_mask = _mm256_cmpgt_epi64(current, thresh);
+    // current < thresholds
+    __m256i lt_mask = _mm256_cmpgt_epi64(thresh, current);
+
+    uint32_t gt_res = _mm256_movemask_pd(_mm256_castsi256_pd(gt_mask));
+    uint32_t lt_res = _mm256_movemask_pd(_mm256_castsi256_pd(lt_mask));
+
+    uint32_t final_mask = 0;
+    for (size_t i = 0; i < kBatchSize; ++i) {
+      bool matched =
+          is_greater[i] ? (gt_res & (1u << i)) : (lt_res & (1u << i));
+      if (matched)
+        final_mask |= (1u << i);
+    }
+    return final_mask & active_mask;
+  }
 };
 
 template <typename Tag> struct RelativeCondition {
