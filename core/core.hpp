@@ -202,38 +202,46 @@ struct Quote {
 };
 
 // Intermediate DSL structure: Market Bound
-struct MarketBoundOrder {
+template <typename B = MarketBackend> struct MarketBoundOrder {
   Shares quantity;
   bool is_buy;
   MarketId market;
   int64_t timestamp_ns;
-  const MarketBackend *backend = nullptr;
+  const B *backend = nullptr;
 };
 
-inline MarketBoundOrder operator/(const Buy &b, MarketId market) {
-  return MarketBoundOrder{b.quantity, true, market, b.timestamp_ns};
+inline MarketBoundOrder<MarketBackend> operator/(const Buy &b,
+                                                 MarketId market) {
+  return {b.quantity, true, market, b.timestamp_ns};
 }
 
-inline MarketBoundOrder operator/(const Buy &b, const char *market) {
-  return MarketBoundOrder{b.quantity, true, MarketId(market), b.timestamp_ns};
+inline MarketBoundOrder<MarketBackend> operator/(const Buy &b,
+                                                 const char *market) {
+  return {b.quantity, true, MarketId(market), b.timestamp_ns};
 }
 
-inline MarketBoundOrder operator/(const Sell &s, MarketId market) {
-  return MarketBoundOrder{s.quantity, false, market, s.timestamp_ns};
+inline MarketBoundOrder<MarketBackend> operator/(const Sell &s,
+                                                 MarketId market) {
+  return {s.quantity, false, market, s.timestamp_ns};
 }
 
-inline MarketBoundOrder operator/(const Sell &s, const char *market) {
-  return MarketBoundOrder{s.quantity, false, MarketId(market), s.timestamp_ns};
+inline MarketBoundOrder<MarketBackend> operator/(const Sell &s,
+                                                 const char *market) {
+  return {s.quantity, false, MarketId(market), s.timestamp_ns};
 }
 
-inline Order operator/(const MarketBoundOrder &m, YES_t) {
-  Order o{m.market, m.quantity, m.is_buy, true, Price(0), m.timestamp_ns};
+template <typename B>
+inline DetailedOrder<B> operator/(const MarketBoundOrder<B> &m, YES_t) {
+  DetailedOrder<B> o{
+      Order{m.market, m.quantity, m.is_buy, true, Price(0), m.timestamp_ns}};
   o.backend = m.backend;
   return o;
 }
 
-inline Order operator/(const MarketBoundOrder &m, NO_t) {
-  Order o{m.market, m.quantity, m.is_buy, false, Price(0), m.timestamp_ns};
+template <typename B>
+inline DetailedOrder<B> operator/(const MarketBoundOrder<B> &m, NO_t) {
+  DetailedOrder<B> o{
+      Order{m.market, m.quantity, m.is_buy, false, Price(0), m.timestamp_ns}};
   o.backend = m.backend;
   return o;
 }
