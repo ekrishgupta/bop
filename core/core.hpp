@@ -119,13 +119,13 @@ struct SORData {
 
 struct Order {
   MarketId market;
-  int quantity;
+  Shares quantity;
   bool is_buy;
   bool outcome_yes;
   Price price = Price(0);
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
-  int display_qty = 0;
+  Shares display_qty = Shares(0);
   uint32_t account_hash = 0;
   Price tp_price = Price(0);
   Price sl_price = Price(0);
@@ -143,11 +143,11 @@ struct Order {
   bool is_spread = false;
 
   Order()
-      : market(0u), market2(0u), is_spread(false), quantity(0), is_buy(true),
-        outcome_yes(true), price(0), creation_timestamp_ns(0),
+      : market(0u), market2(0u), is_spread(false), quantity(Shares(0)),
+        is_buy(true), outcome_yes(true), price(0), creation_timestamp_ns(0),
         backend(nullptr) {}
 
-  Order(MarketId m, int q, bool b, bool y, Price p, int64_t ts)
+  Order(MarketId m, Shares q, bool b, bool y, Price p, int64_t ts)
       : market(m), market2(0u), is_spread(false), quantity(q), is_buy(b),
         outcome_yes(y), price(p), algo_type(AlgoType::None),
         algo_params(std::monostate{}), creation_timestamp_ns(ts),
@@ -156,10 +156,10 @@ struct Order {
 
 // Action Types
 struct Buy {
-  int quantity;
+  Shares quantity;
   int64_t timestamp_ns;
-  explicit Buy(int q) : quantity(q) {
-    if (q <= 0)
+  explicit Buy(Shares q) : quantity(q) {
+    if (q.raw <= 0)
       throw std::invalid_argument("Buy quantity must be positive");
     timestamp_ns =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -167,10 +167,10 @@ struct Buy {
 };
 
 struct Sell {
-  int quantity;
+  Shares quantity;
   int64_t timestamp_ns;
-  explicit Sell(int q) : quantity(q) {
-    if (q <= 0)
+  explicit Sell(Shares q) : quantity(q) {
+    if (q.raw <= 0)
       throw std::invalid_argument("Sell quantity must be positive");
     timestamp_ns =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -178,10 +178,10 @@ struct Sell {
 };
 
 struct Quote {
-  int quantity;
+  Shares quantity;
   int64_t timestamp_ns;
-  explicit Quote(int q) : quantity(q) {
-    if (q <= 0)
+  explicit Quote(Shares q) : quantity(q) {
+    if (q.raw <= 0)
       throw std::invalid_argument("Quote quantity must be positive");
     timestamp_ns =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -190,7 +190,7 @@ struct Quote {
 
 // Intermediate DSL structure: Market Bound
 struct MarketBoundOrder {
-  int quantity;
+  Shares quantity;
   bool is_buy;
   MarketId market;
   int64_t timestamp_ns;
