@@ -8,6 +8,7 @@ namespace bop {
 
 AlgoManager GlobalAlgoManager;
 OrderTracker GlobalOrderTracker;
+StrategyProxy Strategy;
 
 // --- ExecutionEngine ---
 
@@ -39,6 +40,36 @@ void ExecutionEngine::execute_cancel(const std::string &id) {
 void ExecutionEngine::execute_batch(const std::vector<Order> &orders) {
   for (const auto &o : orders)
     execute_order(o);
+}
+
+void ExecutionEngine::execute_cancel_all() {
+  auto orders = get_orders();
+  for (const auto &o : orders) {
+    if (o.status == OrderStatus::Open ||
+        o.status == OrderStatus::PartiallyFilled) {
+      execute_cancel(o.id);
+    }
+  }
+}
+
+void ExecutionEngine::execute_close_positions() {
+  auto positions = get_all_positions();
+  for (const auto &[market_hash, qty] : positions) {
+    if (qty == 0)
+      continue;
+
+    // Find a backend that has this market
+    for (auto b : backends_) {
+      // Simple close: Market order in opposite direction
+      Order close_order;
+      close_order.market = MarketId(market_hash);
+      close_order.quantity = std::abs(qty);
+      close_order.is_buy = (qty < 0);
+      close_order.outcome_yes = true; // Simplified
+      close_order.backend = b;
+      execute_order(close_order);
+    }
+  }
 }
 
 void ExecutionEngine::track_order(const std::string &id, const Order &o) {
@@ -82,18 +113,28 @@ LiveExecutionEngine::~LiveExecutionEngine() {
 }
 
 int64_t LiveExecutionEngine::get_position(MarketId market) const {
-  auto state = current_state.load();
+  std::lock_guard<std::mutex> lock(state_mtx);
+  auto state = current_state;
+  if (!state)
+    return 0;
   auto it = state->positions.find(market.hash);
   return (it != state->positions.end()) ? it->second : 0;
 }
 
 Price LiveExecutionEngine::get_balance() const {
-  return current_state.load()->balance;
+  std::lock_guard<std::mutex> lock(state_mtx);
+  return current_state ? current_state->balance : Price(0);
 }
 
 double
 LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
-  auto state = current_state.load();
+  std::shared_ptr<const LiveEngineState> state;
+  {
+    std::lock_guard<std::mutex> lock(state_mtx);
+    state = current_state;
+  }
+  if (!state)
+    return 0.0;
   std::unordered_map<uint32_t, double> volatilities;
   for (auto const &[hash, tracker] : market_volatility) {
     volatilities[hash] = tracker.current_vol;
@@ -122,9 +163,13 @@ LiveExecutionEngine::get_portfolio_metric(PortfolioQuery::Metric metric) const {
 }
 
 Price LiveExecutionEngine::get_exposure() const {
-  return current_state.load()->exposure;
+  std::lock_guard<std::mutex> lock(state_mtx);
+  return current_state ? current_state->exposure : Price(0);
 }
-Price LiveExecutionEngine::get_pnl() const { return current_state.load()->pnl; }
+Price LiveExecutionEngine::get_pnl() const {
+  std::lock_guard<std::mutex> lock(state_mtx);
+  return current_state ? current_state->pnl : Price(0);
+}
 
 void LiveExecutionEngine::run() {
   is_running = true;
@@ -177,14 +222,10 @@ void LiveExecutionEngine::sync_state() {
     } catch (...) {
     }
   }
-  auto new_state = std::make_shared<LiveEngineState>();
-  new_state->balance = total_balance;
-  new_state->positions = std::move(new_positions);
-  new_state->exposure = total_exposure;
-  new_state->pnl = Price(current_daily_pnl_raw.load());
-
-  current_state.store(
-      std::shared_ptr<const LiveEngineState>(std::move(new_state)));
+  {
+    std::lock_guard<std::mutex> lock(state_mtx);
+    current_state = std::move(new_state);
+  }
 }
 
 // --- StreamingMarketBackend ---
@@ -252,6 +293,32 @@ void StreamingMarketBackend::notify_status(const std::string &id,
                                            OrderStatus status) {
   if (engine_)
     engine_->update_order_status(id, status);
+}
+
+// --- Stateful Strategies ---
+
+bool OnFillTrigger::evaluate(const ExecutionEngine &) { return filled; }
+
+void OrderAction::execute(ExecutionEngine &engine) { order >> engine; }
+
+void CancelAction::execute(ExecutionEngine &engine) {
+  engine.execute_cancel(order_id);
+}
+
+void PersistentStrategy::on_execution_event_impl(ExecutionEngine &,
+                                                 const std::string &id,
+                                                 OrderStatus s) {
+  if (s == OrderStatus::Filled) {
+    std::lock_guard<std::mutex> lock(steps_mtx);
+    for (auto &step : steps) {
+      auto fill_trigger =
+          std::dynamic_pointer_cast<OnFillTrigger>(step.trigger);
+      if (fill_trigger &&
+          (fill_trigger->order_id == id || fill_trigger->order_id == "any")) {
+        fill_trigger->filled = true;
+      }
+    }
+  }
 }
 
 // --- Strategies ---

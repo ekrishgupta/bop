@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(bop LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Includes
@@ -54,3 +54,12 @@ target_link_libraries(backtest_example PRIVATE bop_core)
 
 add_executable(universal_market_example examples/universal_market_example.cpp)
 target_link_libraries(universal_market_example PRIVATE bop_core)
+
+add_executable(test_stateful_strategy tests/test_stateful_strategy.cpp)
+target_link_libraries(test_stateful_strategy PRIVATE bop_core)
+
+add_executable(test_risk_gates tests/test_risk_gates.cpp)
+target_link_libraries(test_risk_gates PRIVATE bop_core)
+
+add_executable(dsl_advanced_example examples/dsl_advanced_example.cpp)
+target_link_libraries(dsl_advanced_example PRIVATE bop_core)

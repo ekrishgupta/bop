@@ -27,8 +27,8 @@ class TWAPAlgo : public ExecutionAlgo, public AlgoCRTP<TWAPAlgo> {
   int64_t duration_sec;
   int64_t start_time_ns;
   int64_t last_slice_time_ns = 0;
-  int total_qty;
-  int filled_qty = 0;
+  Shares total_qty;
+  Shares filled_qty = Shares(0);
   Price last_price = Price(0);
   double adaptive_multiplier = 1.0;
 
@@ -38,7 +38,7 @@ public:
   bool tick_impl(ExecutionEngine &engine);
 
 private:
-  void dispatch_slice(int qty, ExecutionEngine &engine);
+  void dispatch_slice(Shares qty, ExecutionEngine &engine);
 };
 
 class TrailingStopAlgo : public ExecutionAlgo,
@@ -70,8 +70,8 @@ public:
 
 class VWAPAlgo : public ExecutionAlgo, public AlgoCRTP<VWAPAlgo> {
   double participation_rate;
-  int total_qty;
-  int filled_qty = 0;
+  Shares total_qty;
+  Shares filled_qty = Shares(0);
   int64_t last_market_volume = -1;
   int64_t last_slice_time_ns = 0;
 
@@ -87,12 +87,12 @@ class ArbitrageAlgo : public ExecutionAlgo, public AlgoCRTP<ArbitrageAlgo> {
   const MarketBackend *b1;
   const MarketBackend *b2;
   Price min_profit;
-  int quantity;
+  Shares quantity;
   bool active = true;
 
 public:
   ArbitrageAlgo(MarketId m1, const MarketBackend *b1, MarketId m2,
-                const MarketBackend *b2, Price min_profit, int qty);
+                const MarketBackend *b2, Price min_profit, Shares qty);
   bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
   bool tick_impl(ExecutionEngine &engine);
 };
@@ -113,7 +113,7 @@ public:
 class SORAlgo : public ExecutionAlgo, public AlgoCRTP<SORAlgo> {
   const MarketBackend *b1;
   const MarketBackend *b2;
-  int total_qty;
+  Shares total_qty;
   bool active = true;
 
 public:

@@ -723,10 +723,10 @@ inline RelativeCondition<Tag> operator>(MarketQuery<Tag> a,
 
 // Price Comparisons
 inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, Price threshold) {
-  return {q, threshold.raw, true};
+  return {q, threshold, true};
 }
 inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, Price threshold) {
-  return {q, threshold.raw, false};
+  return {q, threshold, false};
 }
 
 inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
@@ -737,40 +737,40 @@ inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
 }
 
 // Volume Comparisons
-inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
-  return {q, static_cast<int64_t>(t), true};
+inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, Shares t) {
+  return {q, t, true};
 }
-inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
-  return {q, static_cast<int64_t>(t), false};
+inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, Shares t) {
+  return {q, t, false};
 }
 
 // Depth Comparisons
 inline Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
-                                     int64_t threshold) {
+                                     Shares threshold) {
   return {q, threshold, false};
 }
 inline Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
-                                     int64_t threshold) {
+                                     Shares threshold) {
   return {q, threshold, true};
 }
 
 // Position comparisons
 inline Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
-                                        int64_t shares) {
+                                        Shares shares) {
   return {q, shares, true};
 }
 inline Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
-                                        int64_t shares) {
+                                        Shares shares) {
   return {q, shares, false};
 }
 
 // Balance comparisons
 inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
-                                                     int64_t amount) {
+                                                     Price amount) {
   return {q, amount, true};
 }
 inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
-                                                     int64_t amount) {
+                                                     Price amount) {
   return {q, amount, false};
 }
 

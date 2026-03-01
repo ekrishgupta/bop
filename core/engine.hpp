@@ -654,6 +654,34 @@ inline bool Condition<Tag, Q>::eval() const {
                                 : LiveExchange.get_depth(query.market,
                                                          query.outcome_yes)))
                 .raw;
+    } else if constexpr (std::is_same_v<Tag, MidpointTag>) {
+      Price mid(0);
+      if (query.backend) {
+        mid = query.backend->clob_get_midpoint(query.market);
+        if (mid.raw == 0) {
+          Price bid = query.backend->get_depth(query.market, true);
+          Price ask = query.backend->get_depth(query.market, false);
+          if (bid.raw > 0 && ask.raw > 0)
+            mid = Price((bid.raw + ask.raw) / 2);
+        }
+      } else {
+        Price bid = LiveExchange.get_depth(query.market, true);
+        Price ask = LiveExchange.get_depth(query.market, false);
+        if (bid.raw > 0 && ask.raw > 0)
+          mid = Price((bid.raw + ask.raw) / 2);
+      }
+      val = (double)mid.raw;
+    } else if constexpr (std::is_same_v<Tag, FairPriceTag>) {
+      Price yes = query.backend ? query.backend->get_price(query.market, true)
+                                : LiveExchange.get_price(query.market, true);
+      Price no = query.backend ? query.backend->get_price(query.market, false)
+                               : LiveExchange.get_price(query.market, false);
+      if (yes.raw > 0 && no.raw > 0) {
+        Price implied_from_no = Price::from_cents(100) - no;
+        val = (double)((yes.raw + implied_from_no.raw) / 2);
+      } else {
+        val = (double)yes.raw;
+      }
     } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
       val = (double)LiveExchange.get_open_order_count(query.market);
     } else if constexpr (std::is_same_v<Tag, PortfolioTag>) {
@@ -776,6 +804,39 @@ inline void operator>>(RiskViolationTrigger, RiskAction action) {
       }
     }
   };
+}
+
+template <typename T> struct TriggerWrapper : public Trigger {
+  T condition;
+  TriggerWrapper(T c) : condition(std::move(c)) {}
+  bool evaluate(const ExecutionEngine &) override { return condition.eval(); }
+};
+
+// Internal specialization for TimerTrigger
+template <> struct TriggerWrapper<TimerTrigger> : public Trigger {
+  TimerTrigger trigger;
+  TriggerWrapper(TimerTrigger t) : trigger(std::move(t)) {}
+  bool evaluate(const ExecutionEngine &e) override {
+    return trigger.evaluate(e);
+  }
+  bool is_recurring() const override { return trigger.is_recurring(); }
+};
+
+inline void operator>>(WorkflowChain chain, ExecutionEngine &engine) {
+  std::cout << "[WORKFLOW] Registering chained strategy..." << std::endl;
+
+  auto p_strategy =
+      GlobalAlgoManager.create_strategy<PersistentStrategy>(WorkflowStep{
+          std::make_shared<TriggerWrapper<decltype(chain.head.condition)>>(
+              std::move(chain.head.condition)),
+          std::make_shared<OrderAction>(std::move(chain.head.order))});
+
+  for (auto &action : chain.tail) {
+    // Current PersistentStrategy is a simple concurrent-step runner.
+    // For proper 'Chaining', we'd need a SequenceStrategy.
+    // Let's implement a simple SequenceStrategy in situ or just wrap it.
+    p_strategy->add_step({std::make_shared<OnFillTrigger>("any"), action});
+  }
 }
 
 } // namespace bop

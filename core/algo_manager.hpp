@@ -65,6 +65,8 @@ public:
                                OrderStatus) {}
 };
 
+class PersistentStrategy;
+
 class AlgoManager {
   // Genetic strategies use PMR for zero-allocation lifecycle
   alignas(std::max_align_t) std::array<std::byte, 1024 * 1024 * 4> pool_buffer;
