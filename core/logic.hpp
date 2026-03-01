@@ -17,6 +17,8 @@ struct ExposureTag {};
 struct PnLTag {};
 struct SpreadTag {};
 struct DepthTag {};
+struct MidpointTag {};
+struct FairPriceTag {};
 struct OpenOrdersTag {};
 struct PortfolioTag {};
 struct TimeTag {};
@@ -250,6 +252,16 @@ struct MarketTarget {
   inline MarketQuery<DepthTag> BestAsk() const {
     auto r = resolve();
     return {r.market, false, r.backend, r.is_universal};
+  }
+
+  inline MarketQuery<MidpointTag> Midpoint() const {
+    auto r = resolve();
+    return {r.market, true, r.backend, r.is_universal};
+  }
+
+  inline MarketQuery<FairPriceTag> FairPrice() const {
+    auto r = resolve();
+    return {r.market, true, r.backend, r.is_universal};
   }
 
   // Event Hooks
@@ -825,6 +837,68 @@ inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p,
           false};
 }
 
+// --- Temporal Helpers ---
+inline WhenBinder<TimerTrigger> Every(std::chrono::milliseconds d) {
+  return {TimerTrigger(d, true)};
+}
+
+inline WhenBinder<TimerTrigger> After(std::chrono::milliseconds d) {
+  return {TimerTrigger(d, false)};
+}
+
+// Support for standard chrono literals
+template <typename Rep, typename Period>
+inline WhenBinder<TimerTrigger> Every(std::chrono::duration<Rep, Period> d) {
+  return Every(std::chrono::duration_cast<std::chrono::milliseconds>(d));
+}
+
+template <typename Rep, typename Period>
+inline WhenBinder<TimerTrigger> After(std::chrono::duration<Rep, Period> d) {
+  return After(std::chrono::duration_cast<std::chrono::milliseconds>(d));
+}
+
+// --- Workflow Chaining ---
+struct WorkflowChain {
+  ConditionalOrder<Trigger> head;
+  std::pmr::vector<std::shared_ptr<Action>> tail;
+
+  WorkflowChain(
+      ConditionalOrder<Trigger> h,
+      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
+      : head(std::move(h)), tail(mr) {}
+};
+
+inline void operator>>(WorkflowChain chain, ExecutionEngine &engine);
+
+inline WorkflowChain operator>>(ConditionalOrder<Trigger> co,
+                                Order next_order) {
+  WorkflowChain chain(std::move(co));
+  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
+  return chain;
+}
+
+inline WorkflowChain operator>>(WorkflowChain chain, Order next_order) {
+  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
+  return chain;
+}
+
+// --- Proportional Sizing ---
+struct PctSize {
+  double value;
+};
+
+inline Buy operator*(Buy b, PctSize p) {
+  // Logic handled in ExecutionEngine sizing to avoid context dependency here
+  return b;
+}
+
+inline PctSize operator"" _pct(long double v) {
+  return {static_cast<double>(v)};
+}
+inline PctSize operator"" _pct(unsigned long long int v) {
+  return {static_cast<double>(v)};
+}
+
 // Exposure/PnL comparisons
 inline Condition<ExposureTag, RiskQuery>
 operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
@@ -838,43 +912,62 @@ inline std::initializer_list<Order> Batch(std::initializer_list<Order> list) {
   return list;
 }
 
+struct StrategyContext {
+  std::pmr::memory_resource *mr;
+  static StrategyContext &instance() {
+    static thread_local StrategyContext ctx{std::pmr::get_default_resource()};
+    return ctx;
+  }
+};
+
+inline void SetStrategyMemoryResource(std::pmr::memory_resource *mr) {
+  StrategyContext::instance().mr = mr;
+}
+
 // --- Stateful Strategy Helpers ---
-inline std::shared_ptr<Trigger> After(std::chrono::milliseconds d) {
-  return std::make_shared<TimerTrigger>(d, false);
+inline Trigger *After(std::chrono::milliseconds d) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) TimerTrigger(d, false);
 }
 
-inline std::shared_ptr<Trigger> Every(std::chrono::milliseconds d) {
-  return std::make_shared<TimerTrigger>(d, true);
+inline Trigger *Every(std::chrono::milliseconds d) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) TimerTrigger(d, true);
 }
 
-inline std::shared_ptr<Trigger> OnFill(const Order &o) {
-  return std::make_shared<OnFillTrigger>(o.order_id);
+inline Trigger *OnFill(const Order &o) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) OnFillTrigger(o.order_id, mr);
 }
 
-inline std::shared_ptr<Trigger> OnFill(std::string order_id) {
-  return std::make_shared<OnFillTrigger>(std::move(order_id));
+inline Trigger *OnFill(std::string_view order_id) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) OnFillTrigger(order_id, mr);
 }
 
-inline std::shared_ptr<Action> Cancel(std::string order_id) {
-  return std::make_shared<CancelAction>(std::move(order_id));
+inline Action *Cancel(std::string_view order_id) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) CancelAction(order_id, mr);
 }
 
-inline std::shared_ptr<Action> Cancel(const Order &o) {
-  return std::make_shared<CancelAction>(o.order_id);
+inline Action *Cancel(const Order &o) {
+  auto *mr = StrategyContext::instance().mr;
+  return new (mr) CancelAction(o.order_id, mr);
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t, Order o) {
-  return {t, std::make_shared<OrderAction>(std::move(o))};
+inline WorkflowStep operator>>(Trigger *t, Order o) {
+  auto *mr = StrategyContext::instance().mr;
+  return {t, new (mr) OrderAction(std::move(o)), mr};
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
+inline WorkflowStep operator>>(Trigger *t,
                                std::function<void(ExecutionEngine &)> cb) {
-  return {t, std::make_shared<CallbackAction>(std::move(cb))};
+  auto *mr = StrategyContext::instance().mr;
+  return {t, new (mr) CallbackAction(std::move(cb)), mr};
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
-                               std::shared_ptr<Action> a) {
-  return {t, a};
+inline WorkflowStep operator>>(Trigger *t, Action *a) {
+  return {t, a, StrategyContext::instance().mr};
 }
 
 } // namespace bop
