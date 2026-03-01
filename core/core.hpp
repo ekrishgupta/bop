@@ -1,5 +1,6 @@
 #pragma once
 
+#include "capabilities.hpp"
 #include "price.hpp"
 #include "units.hpp"
 #include <chrono>
