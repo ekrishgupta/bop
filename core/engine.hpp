@@ -720,13 +720,22 @@ PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
 
 class PersistentStrategy : public bop::ExecutionStrategy,
                            public bop::StrategyCRTP<PersistentStrategy> {
-  std::vector<WorkflowStep> steps;
+  std::pmr::vector<WorkflowStep> steps;
   std::mutex steps_mtx;
 
 public:
-  PersistentStrategy() : steps() {}
-  PersistentStrategy(WorkflowStep step) { steps.push_back(std::move(step)); }
-  PersistentStrategy(std::vector<WorkflowStep> s) : steps(std::move(s)) {}
+  PersistentStrategy(
+      std::pmr::memory_resource *mr = StrategyContext::instance().mr)
+      : steps(mr) {}
+  PersistentStrategy(WorkflowStep step, std::pmr::memory_resource *mr =
+                                            StrategyContext::instance().mr)
+      : steps(mr) {
+    steps.push_back(std::move(step));
+  }
+  PersistentStrategy(
+      std::pmr::vector<WorkflowStep> s,
+      std::pmr::memory_resource *mr = StrategyContext::instance().mr)
+      : steps(std::move(s)) {}
 
   void add_step(WorkflowStep step) {
     std::lock_guard<std::mutex> lock(steps_mtx);
