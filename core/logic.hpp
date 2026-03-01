@@ -774,29 +774,16 @@ inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
   return {q, amount, false};
 }
 
-// Synthetic Query Comparisons
 template <typename Tag>
 inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator>(SyntheticMarketQuery<Tag> q, double threshold) {
-  return {q, static_cast<int64_t>(threshold * 100), true};
+operator>(SyntheticMarketQuery<Tag> q, typename TagUnit<Tag>::type threshold) {
+  return {q, threshold, true};
 }
 
 template <typename Tag>
 inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator<(SyntheticMarketQuery<Tag> q, double threshold) {
-  return {q, static_cast<int64_t>(threshold * 100), false};
-}
-
-template <typename Tag>
-inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator>(SyntheticMarketQuery<Tag> q, Price threshold) {
-  return {q, threshold.raw, true};
-}
-
-template <typename Tag>
-inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator<(SyntheticMarketQuery<Tag> q, Price threshold) {
-  return {q, threshold.raw, false};
+operator<(SyntheticMarketQuery<Tag> q, typename TagUnit<Tag>::type threshold) {
+  return {q, threshold, false};
 }
 
 // --- DSL Bytecode VM ---
