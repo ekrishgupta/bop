@@ -91,7 +91,8 @@ enum class AlgoType : uint8_t {
   Trailing,
   Arbitrage,
   MarketMaker,
-  SOR
+  SOR,
+  Shadow
 };
 
 struct PegData {
