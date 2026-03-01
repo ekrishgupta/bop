@@ -233,6 +233,18 @@ struct MarketTarget {
   }
 };
 
+// Synthetic Market Support
+enum class MathOp { Add, Sub, Mul, Div };
+
+struct SyntheticMarket {
+  std::shared_ptr<MarketTarget> left;
+  std::shared_ptr<MarketTarget> right;
+  MathOp op;
+
+  inline MarketQuery<PriceTag> Price(YES_t) const;
+  inline MarketQuery<PriceTag> Price(NO_t) const;
+};
+
 // Spread Logic
 struct SpreadTarget {
   MarketId m1;
@@ -252,10 +264,29 @@ struct SpreadTarget {
   }
 };
 
-inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
-  auto ra = a.resolve();
-  auto rb = b.resolve();
-  return {ra.market, rb.market, ra.backend};
+inline SyntheticMarket operator-(MarketTarget a, MarketTarget b) {
+  return {std::make_shared<MarketTarget>(a.resolve()),
+          std::make_shared<MarketTarget>(b.resolve()), MathOp::Sub};
+}
+
+inline SyntheticMarket operator+(MarketTarget a, MarketTarget b) {
+  return {std::make_shared<MarketTarget>(a.resolve()),
+          std::make_shared<MarketTarget>(b.resolve()), MathOp::Add};
+}
+
+inline SpreadTarget ToSpread(const SyntheticMarket &s) {
+  return {s.left->market, s.right->market, s.left->backend};
+}
+
+inline MarketBoundSpread operator/(const bop::Buy &b,
+                                   const SyntheticMarket &s) {
+  return {b.quantity, true, ToSpread(s), b.timestamp_ns, s.left->backend};
+}
+
+inline MarketBoundSpread operator/(const bop::Sell &s,
+                                   const SyntheticMarket &s_in) {
+  return {s.quantity, false, ToSpread(s_in), s.timestamp_ns,
+          s_in.left->backend};
 }
 
 struct MarketBoundSpread {
