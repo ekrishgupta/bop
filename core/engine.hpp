@@ -166,13 +166,12 @@ struct ExecutionEngine {
 
     for (auto const &[other_hash, corr] : it->second) {
       if (std::abs(corr) > limits.max_correlation_threshold) {
-        int64_t other_pos = get_position(MarketId(other_hash));
-        if (other_pos != 0) {
-          bool same_dir =
-              (corr > 0 &&
-               ((o.is_buy && other_pos > 0) || (!o.is_buy && other_pos < 0))) ||
-              (corr < 0 &&
-               ((o.is_buy && other_pos < 0) || (!o.is_buy && other_pos > 0)));
+        Shares other_pos = get_position(MarketId(other_hash));
+        if (other_pos.raw != 0) {
+          bool same_dir = (corr > 0 && ((o.is_buy && other_pos.raw > 0) ||
+                                        (!o.is_buy && other_pos.raw < 0))) ||
+                          (corr < 0 && ((o.is_buy && other_pos.raw < 0) ||
+                                        (!o.is_buy && other_pos.raw > 0)));
           if (same_dir) {
             std::cerr << "[RISK] REJECT: High correlation (" << corr
                       << ") with existing position in market hash "
@@ -185,13 +184,13 @@ struct ExecutionEngine {
     return true;
   }
 
-  int64_t calculate_dynamic_size(const Order &o) const {
+  Shares calculate_dynamic_size(const Order &o) const {
     if (!limits.dynamic_sizing_enabled)
       return o.quantity;
 
     Price equity = get_balance();
     if (equity.raw <= 0)
-      return limits.min_order_quantity;
+      return Shares(limits.min_order_quantity);
 
     double risk_amount = equity.to_double() * limits.risk_per_trade_percent;
     Price p = (o.price.raw > 0) ? o.price : get_price(o.market, o.outcome_yes);
@@ -203,7 +202,7 @@ struct ExecutionEngine {
       size = limits.max_position_size;
     if (size < limits.min_order_quantity)
       size = limits.min_order_quantity;
-    return size;
+    return Shares(size);
   }
 
   std::string get_sector(const std::string &ticker) const {
@@ -230,7 +229,7 @@ struct ExecutionEngine {
   // Order Tracking
   void track_order(const std::string &id, const Order &o);
   void update_order_status(const std::string &id, OrderStatus status);
-  void add_order_fill(const std::string &id, int qty, Price price);
+  void add_order_fill(const std::string &id, Shares qty, Price price);
 
   // Risk Management
   bool check_risk(const Order &o) const {
@@ -278,12 +277,13 @@ struct ExecutionEngine {
       return false;
 
     // 1. Max Position Size
-    int64_t current_pos = get_position(o.market);
-    int64_t new_pos = current_pos + (o.is_buy ? o.quantity : -o.quantity);
-    if (std::abs(new_pos) > limits.max_position_size) {
+    Shares current_pos = get_position(o.market);
+    int64_t new_pos_raw =
+        current_pos.raw + (o.is_buy ? o.quantity.raw : -o.quantity.raw);
+    if (std::abs(new_pos_raw) > limits.max_position_size) {
       std::cerr << "[RISK] REJECT: Max position size exceeded for "
-                << o.market.ticker << " (Current: " << current_pos
-                << ", Requested: " << o.quantity << ")" << std::endl;
+                << o.market.ticker << " (Current: " << current_pos.raw
+                << ", Requested: " << o.quantity.raw << ")" << std::endl;
       return false;
     }
 
@@ -318,7 +318,7 @@ struct ExecutionEngine {
 
     Greeks mg = const_cast<GreekEngine &>(greek_engine)
                     .calculate_market_greeks(o.market, backends_, volatilities);
-    double qty = (o.is_buy ? (double)o.quantity : -(double)o.quantity);
+    double qty = (o.is_buy ? (double)o.quantity.raw : -(double)o.quantity.raw);
     double incremental_delta = mg.delta * qty;
     double incremental_gamma = mg.gamma * qty;
 
@@ -413,7 +413,7 @@ struct ExecutionEngine {
     return total;
   }
 
-  virtual int64_t get_position(MarketId market) const {
+  virtual Shares get_position(MarketId market) const {
     int64_t total = 0;
     for (auto b : backends_) {
       std::string pos_json = b->get_positions();
@@ -442,7 +442,7 @@ struct ExecutionEngine {
       } catch (...) {
       }
     }
-    return total;
+    return Shares(total);
   }
 
   virtual Price get_balance() const {
@@ -516,7 +516,7 @@ struct ExecutionEngine {
     return best_price;
   }
 
-  virtual int64_t get_volume(MarketId market) const;
+  virtual Shares get_volume(MarketId market) const;
 
   virtual void run();
   virtual void trigger_tick() {}
@@ -542,7 +542,7 @@ public:
 
   void trigger_tick() override { tick_cv.notify_one(); }
 
-  int64_t get_position(MarketId market) const override;
+  Shares get_position(MarketId market) const override;
   Price get_balance() const override;
   Price get_exposure() const override;
   Price get_pnl() const override;
@@ -550,7 +550,9 @@ public:
   void run() override;
 
   std::unordered_map<uint32_t, int64_t> get_all_positions() const override {
-    return current_state.load()->positions;
+    std::lock_guard<std::mutex> lock(state_mtx);
+    return current_state ? current_state->positions
+                         : std::unordered_map<uint32_t, int64_t>();
   }
 
 private:
