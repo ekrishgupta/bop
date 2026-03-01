@@ -302,7 +302,7 @@ bool OnFillTrigger::evaluate(const ExecutionEngine &) { return filled; }
 void OrderAction::execute(ExecutionEngine &engine) { order >> engine; }
 
 void CancelAction::execute(ExecutionEngine &engine) {
-  engine.execute_cancel(order_id);
+  engine.execute_cancel(std::string(order_id));
 }
 
 void PersistentStrategy::on_execution_event_impl(ExecutionEngine &,
@@ -311,14 +311,74 @@ void PersistentStrategy::on_execution_event_impl(ExecutionEngine &,
   if (s == OrderStatus::Filled) {
     std::lock_guard<std::mutex> lock(steps_mtx);
     for (auto &step : steps) {
-      auto fill_trigger =
-          std::dynamic_pointer_cast<OnFillTrigger>(step.trigger);
+      auto fill_trigger = dynamic_cast<OnFillTrigger *>(step.trigger);
       if (fill_trigger &&
           (fill_trigger->order_id == id || fill_trigger->order_id == "any")) {
         fill_trigger->filled = true;
       }
     }
   }
+}
+
+bool BytecodeEvaluator::evaluate(ExecutionEngine &engine) const {
+  int64_t stack[64];
+  int sp = -1;
+  const Instruction *pc = code.data();
+  const Instruction *end = pc + code.size();
+
+  while (pc < end) {
+    switch (pc->op) {
+    case OpCode::LOAD_PRICE:
+      stack[++sp] = engine.get_price(MarketId(pc->arg), true).raw;
+      break;
+    case OpCode::LOAD_VOL:
+      stack[++sp] = engine.get_volume(MarketId(pc->arg));
+      break;
+    case OpCode::LOAD_POS:
+      stack[++sp] = engine.get_position(MarketId(pc->arg));
+      break;
+    case OpCode::LOAD_CONST:
+      stack[++sp] = constants[pc->arg];
+      break;
+    case OpCode::CMP_GT: {
+      int64_t rhs = stack[sp--];
+      int64_t lhs = stack[sp--];
+      stack[++sp] = (lhs > rhs);
+      break;
+    }
+    case OpCode::CMP_LT: {
+      int64_t rhs = stack[sp--];
+      int64_t lhs = stack[sp--];
+      stack[++sp] = (lhs < rhs);
+      break;
+    }
+    case OpCode::AND: {
+      int64_t rhs = stack[sp--];
+      int64_t lhs = stack[sp--];
+      stack[++sp] = (lhs && rhs);
+      break;
+    }
+    case OpCode::OR: {
+      int64_t rhs = stack[sp--];
+      int64_t lhs = stack[sp--];
+      stack[++sp] = (lhs || rhs);
+      break;
+    }
+    case OpCode::JUMP_IF_FALSE:
+      if (!stack[sp--]) {
+        pc += pc->arg;
+        continue;
+      }
+      break;
+    case OpCode::EXEC_ORDER:
+      engine.execute_order(orders[pc->arg]);
+      break;
+    case OpCode::HALT:
+      return true;
+    }
+    pc++;
+  }
+  return (sp >= 0) ? stack[sp] : false;
 }
 
 // --- Strategies ---
