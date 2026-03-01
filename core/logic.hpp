@@ -25,114 +25,20 @@ struct PortfolioTag {};
 struct TimeTag {};
 struct TicksTag {};
 
-// Unit traits for Tags
-template <typename Tag> struct TagUnit {
-  using type = int64_t;
-};
-template <> struct TagUnit<PriceTag> {
-  using type = Price;
-};
-template <> struct TagUnit<VolumeTag> {
-  using type = Shares;
-};
-template <> struct TagUnit<PositionTag> {
-  using type = Shares;
-};
-template <> struct TagUnit<BalanceTag> {
-  using type = Price;
-};
-template <> struct TagUnit<PnLTag> {
-  using type = Price;
-};
-template <> struct TagUnit<ExposureTag> {
-  using type = Price;
-};
-template <> struct TagUnit<SpreadTag> {
-  using type = Price;
-};
-template <> struct TagUnit<DepthTag> {
-  using type = Shares;
-};
-template <> struct TagUnit<MidpointTag> {
-  using type = Price;
-};
-template <> struct TagUnit<FairPriceTag> {
-  using type = Price;
-};
-template <> struct TagUnit<TicksTag> {
-  using type = Ticks;
-};
-
-struct RiskAction {
-  enum class Type { CancelAll, ClosePositions, Composite };
-  Type type;
-  std::pmr::vector<Type> sub_actions;
-
-  RiskAction(Type t,
-             std::pmr::memory_resource *mr = std::pmr::get_default_resource())
-      : type(t), sub_actions(mr) {}
-};
-
-inline RiskAction CancelAll() {
-  return RiskAction(RiskAction::Type::CancelAll);
-}
-inline RiskAction ClosePositions() {
-  return RiskAction(RiskAction::Type::ClosePositions);
-}
-
-inline RiskAction operator|(RiskAction a, RiskAction b) {
-  RiskAction r(RiskAction::Type::Composite,
-               a.sub_actions.get_allocator().resource());
-  if (a.type == RiskAction::Type::Composite)
-    r.sub_actions = a.sub_actions;
-  else
-    r.sub_actions.push_back(a.type);
-  if (b.type == RiskAction::Type::Composite)
-    r.sub_actions.insert(r.sub_actions.end(), b.sub_actions.begin(),
-                         b.sub_actions.end());
-  else
-    r.sub_actions.push_back(b.type);
-  return r;
-}
-
-struct RiskViolationTrigger {};
-inline RiskViolationTrigger OnRiskViolation() { return {}; }
-
-struct StrategyProxy {
-  template <typename T> void invariant(T &&condition);
-};
-extern StrategyProxy Strategy;
-
-struct RiskQuery {
-  enum class Type { Exposure, PnL };
-  Type type;
-};
-
 // --- Stateful Strategy Triggers ---
 struct Trigger {
   virtual ~Trigger() = default;
   virtual bool evaluate(const ExecutionEngine &engine) = 0;
   virtual bool is_recurring() const { return false; }
 
-  // PMR allocation helper
-  void *operator new(size_t size, std::pmr::memory_resource *mr) {
-    return mr->allocate(size);
-  }
-  void operator delete(void *ptr, std::pmr::memory_resource *mr) {
-    mr->deallocate(ptr, 0); // Size info might be needed for some MRs
-  }
-  void operator delete(void *ptr) {
-    // This is tricky with PMR if we don't know the MR.
-    // Usually we'd use a custom deleter.
-  }
+  // PMR allocation helpers are usually in the MR itself, but let's keep it
+  // simple
 };
 
 struct OnFillTrigger : public Trigger {
-  std::pmr::string order_id;
+  std::string order_id;
   bool filled = false;
-  OnFillTrigger(std::string_view id, std::pmr::memory_resource *mr =
-                                         std::pmr::get_default_resource())
-      : order_id(id, mr) {}
+  OnFillTrigger(std::string_view id) : order_id(id) {}
   bool evaluate(const ExecutionEngine &engine) override;
 };
 
@@ -161,13 +67,6 @@ struct TimerTrigger : public Trigger {
 struct Action {
   virtual ~Action() = default;
   virtual void execute(ExecutionEngine &engine) = 0;
-
-  void *operator new(size_t size, std::pmr::memory_resource *mr) {
-    return mr->allocate(size);
-  }
-  void operator delete(void *ptr, std::pmr::memory_resource *mr) {
-    mr->deallocate(ptr, 0);
-  }
 };
 
 struct OrderAction : public Action {
@@ -177,10 +76,8 @@ struct OrderAction : public Action {
 };
 
 struct CancelAction : public Action {
-  std::pmr::string order_id;
-  CancelAction(std::string_view id,
-               std::pmr::memory_resource *mr = std::pmr::get_default_resource())
-      : order_id(id, mr) {}
+  std::string order_id;
+  CancelAction(std::string_view id) : order_id(id) {}
   void execute(ExecutionEngine &engine) override;
 };
 
@@ -192,14 +89,13 @@ struct CallbackAction : public Action {
 };
 
 struct WorkflowStep {
-  Trigger *trigger;
-  Action *action;
-  std::pmr::memory_resource *mr;
+  std::shared_ptr<Trigger> trigger;
+  std::shared_ptr<Action> action;
+};
 
-  WorkflowStep(
-      Trigger *t, Action *a,
-      std::pmr::memory_resource *resource = std::pmr::get_default_resource())
-      : trigger(t), action(a), mr(resource) {}
+struct RiskQuery {
+  enum class Type { Exposure, PnL };
+  Type type;
 };
 
 struct BalanceQuery {};
@@ -223,20 +119,6 @@ template <typename Tag> struct MarketQuery {
 
   inline MarketQuery<Tag> count() const { return *this; }
 };
-
-template <typename Tag>
-inline SyntheticMarketQuery<Tag> operator-(MarketQuery<Tag> l,
-                                           MarketQuery<Tag> r) {
-  return {std::make_shared<MarketQuery<Tag>>(l),
-          std::make_shared<MarketQuery<Tag>>(r), MathOp::Sub};
-}
-
-template <typename Tag>
-inline SyntheticMarketQuery<Tag> operator+(MarketQuery<Tag> l,
-                                           MarketQuery<Tag> r) {
-  return {std::make_shared<MarketQuery<Tag>>(l),
-          std::make_shared<MarketQuery<Tag>>(r), MathOp::Add};
-}
 
 // Forward declaration of composite conditions
 template <typename L, typename R> struct AndCondition;
@@ -294,16 +176,6 @@ struct MarketTarget {
     return {r.market, false, r.backend, r.is_universal};
   }
 
-  inline MarketQuery<MidpointTag> Midpoint() const {
-    auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
-  }
-
-  inline MarketQuery<FairPriceTag> FairPrice() const {
-    auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
-  }
-
   // Event Hooks
   inline MarketId OnTrade() const { return resolve().market; }
 
@@ -337,33 +209,6 @@ struct MarketTarget {
   }
 };
 
-// Synthetic Market Support
-enum class MathOp { Add, Sub, Mul, Div };
-
-template <typename Tag> struct SyntheticMarketQuery {
-  std::shared_ptr<MarketQuery<Tag>> left;
-  std::shared_ptr<MarketQuery<Tag>> right;
-  MathOp op;
-
-  bool eval() const;
-  double eval_value() const;
-};
-
-struct SyntheticMarket {
-  std::shared_ptr<MarketTarget> left;
-  std::shared_ptr<MarketTarget> right;
-  MathOp op;
-
-  inline SyntheticMarketQuery<PriceTag> Price(YES_t) const {
-    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(YES)),
-            std::make_shared<MarketQuery<PriceTag>>(right->Price(YES)), op};
-  }
-  inline SyntheticMarketQuery<PriceTag> Price(NO_t) const {
-    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(NO)),
-            std::make_shared<MarketQuery<PriceTag>>(right->Price(NO)), op};
-  }
-};
-
 // Spread Logic
 struct SpreadTarget {
   MarketId m1;
@@ -383,29 +228,10 @@ struct SpreadTarget {
   }
 };
 
-inline SyntheticMarket operator-(MarketTarget a, MarketTarget b) {
-  return {std::make_shared<MarketTarget>(a.resolve()),
-          std::make_shared<MarketTarget>(b.resolve()), MathOp::Sub};
-}
-
-inline SyntheticMarket operator+(MarketTarget a, MarketTarget b) {
-  return {std::make_shared<MarketTarget>(a.resolve()),
-          std::make_shared<MarketTarget>(b.resolve()), MathOp::Add};
-}
-
-inline SpreadTarget ToSpread(const SyntheticMarket &s) {
-  return {s.left->market, s.right->market, s.left->backend};
-}
-
-inline MarketBoundSpread operator/(const bop::Buy &b,
-                                   const SyntheticMarket &s) {
-  return {b.quantity, true, ToSpread(s), b.timestamp_ns, s.left->backend};
-}
-
-inline MarketBoundSpread operator/(const bop::Sell &s,
-                                   const SyntheticMarket &s_in) {
-  return {s.quantity, false, ToSpread(s_in), s.timestamp_ns,
-          s_in.left->backend};
+inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
+  auto ra = a.resolve();
+  auto rb = b.resolve();
+  return {ra.market, rb.market, ra.backend};
 }
 
 struct MarketBoundSpread {
@@ -538,61 +364,12 @@ class ExecutionEngine;
 inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine);
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
-  using Unit = typename TagUnit<Tag>::type;
   Q query;
-  Unit threshold;
+  int64_t threshold;
   bool is_greater;
-  Condition(Q q, Unit t, bool g) : query(q), threshold(t), is_greater(g) {}
+  Condition(Q q, int64_t t, bool g) : query(q), threshold(t), is_greater(g) {}
 
   bool eval() const;
-};
-
-// SIMD Condition Batching
-struct PriceBatch {
-  static constexpr size_t kBatchSize = 4;
-  alignas(32) int64_t thresholds[kBatchSize];
-  alignas(32) int64_t results[kBatchSize];
-  uint32_t active_mask = 0;
-  bool is_greater[kBatchSize];
-
-  PriceBatch() {
-    for (size_t i = 0; i < kBatchSize; ++i) {
-      thresholds[i] = 0;
-      results[i] = 0;
-      is_greater[i] = true;
-    }
-  }
-
-  inline void add_condition(size_t idx, int64_t threshold, bool greater) {
-    if (idx < kBatchSize) {
-      thresholds[idx] = threshold;
-      is_greater[idx] = greater;
-      active_mask |= (1u << idx);
-    }
-  }
-
-  inline uint32_t evaluate_avx2(int64_t current_price) const {
-    __m256i current = _mm256_set1_epi64x(current_price);
-    __m256i thresh =
-        _mm256_load_si256(reinterpret_cast<const __m256i *>(thresholds));
-
-    // current > thresholds
-    __m256i gt_mask = _mm256_cmpgt_epi64(current, thresh);
-    // current < thresholds
-    __m256i lt_mask = _mm256_cmpgt_epi64(thresh, current);
-
-    uint32_t gt_res = _mm256_movemask_pd(_mm256_castsi256_pd(gt_mask));
-    uint32_t lt_res = _mm256_movemask_pd(_mm256_castsi256_pd(lt_mask));
-
-    uint32_t final_mask = 0;
-    for (size_t i = 0; i < kBatchSize; ++i) {
-      bool matched =
-          is_greater[i] ? (gt_res & (1u << i)) : (lt_res & (1u << i));
-      if (matched)
-        final_mask |= (1u << i);
-    }
-    return final_mask & active_mask;
-  }
 };
 
 template <typename Tag> struct RelativeCondition {
@@ -653,17 +430,6 @@ template <typename T> struct ConditionalOrder {
   ConditionalOrder(T c, const Order &o) : condition(std::move(c)), order(o) {}
 };
 
-template <typename T> struct Shadow_t {
-  T condition;
-};
-
-template <typename T> inline Shadow_t<T> Shadow(T cond) { return {cond}; }
-
-template <typename T>
-inline ConditionalOrder<T> operator|(Order o, Shadow_t<T> s) {
-  return {std::move(s.condition), std::move(o)};
-}
-
 template <typename T> struct WhenBinder {
   T condition;
 };
@@ -723,10 +489,10 @@ inline RelativeCondition<Tag> operator>(MarketQuery<Tag> a,
 
 // Price Comparisons
 inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, Price threshold) {
-  return {q, threshold, true};
+  return {q, threshold.raw, true};
 }
 inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, Price threshold) {
-  return {q, threshold, false};
+  return {q, threshold.raw, false};
 }
 
 inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
@@ -737,86 +503,42 @@ inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
 }
 
 // Volume Comparisons
-inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, Shares t) {
-  return {q, t, true};
+inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
+  return {q, static_cast<int64_t>(t), true};
 }
-inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, Shares t) {
-  return {q, t, false};
+inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
+  return {q, static_cast<int64_t>(t), false};
 }
 
 // Depth Comparisons
 inline Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
-                                     Shares threshold) {
+                                     int64_t threshold) {
   return {q, threshold, false};
 }
 inline Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
-                                     Shares threshold) {
+                                     int64_t threshold) {
   return {q, threshold, true};
 }
 
 // Position comparisons
 inline Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
-                                        Shares shares) {
+                                        int64_t shares) {
   return {q, shares, true};
 }
 inline Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
-                                        Shares shares) {
+                                        int64_t shares) {
   return {q, shares, false};
 }
 
 // Balance comparisons
 inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
-                                                     Price amount) {
+                                                     int64_t amount) {
   return {q, amount, true};
 }
 inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
-                                                     Price amount) {
+                                                     int64_t amount) {
   return {q, amount, false};
 }
-
-template <typename Tag>
-inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator>(SyntheticMarketQuery<Tag> q, typename TagUnit<Tag>::type threshold) {
-  return {q, threshold, true};
-}
-
-template <typename Tag>
-inline Condition<Tag, SyntheticMarketQuery<Tag>>
-operator<(SyntheticMarketQuery<Tag> q, typename TagUnit<Tag>::type threshold) {
-  return {q, threshold, false};
-}
-
-// --- DSL Bytecode VM ---
-enum class OpCode : uint8_t {
-  LOAD_PRICE, // arg: MarketHash
-  LOAD_VOL,   // arg: MarketHash
-  LOAD_POS,   // arg: MarketHash
-  LOAD_CONST, // arg: ConstantIndex
-  CMP_GT,
-  CMP_LT,
-  AND,
-  OR,
-  JUMP_IF_FALSE, // arg: Offset
-  EXEC_ORDER,    // arg: OrderIndex
-  HALT
-};
-
-struct Instruction {
-  OpCode op;
-  uint32_t arg;
-};
-
-struct BytecodeEvaluator {
-  std::pmr::vector<Instruction> code;
-  std::pmr::vector<int64_t> constants;
-  std::pmr::vector<Order> orders;
-
-  BytecodeEvaluator(
-      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
-      : code(mr), constants(mr), orders(mr) {}
-
-  bool evaluate(ExecutionEngine &engine) const;
-};
 
 // Global helper for DSL entry
 inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr, false}; }
@@ -862,21 +584,6 @@ inline Condition<ExposureTag, RiskQuery> Exposure() {
 
 inline Condition<PnLTag, RiskQuery> PnL() {
   return {{RiskQuery::Type::PnL}, 0, false};
-}
-
-inline Condition<PositionTag> MaxPosition(int64_t shares) {
-  return Condition<PositionTag>(MarketQuery<PositionTag>{MarketId(0), true},
-                                shares, false);
-}
-
-inline Condition<PnLTag, RiskQuery> DailyLossLimit(Price p) {
-  return Condition<PnLTag, RiskQuery>(RiskQuery{RiskQuery::Type::PnL}, -p.raw,
-                                      true);
-}
-
-inline Condition<ExposureTag, RiskQuery> MaxExposure(Price p) {
-  return Condition<ExposureTag, RiskQuery>(RiskQuery{RiskQuery::Type::Exposure},
-                                           p.raw, false);
 }
 
 inline bop::Spread Spread(Price p) { return bop::Spread(p); }
@@ -945,66 +652,43 @@ inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p,
           false};
 }
 
-// --- Temporal Helpers ---
-inline WhenBinder<TimerTrigger> Every(std::chrono::milliseconds d) {
-  return {TimerTrigger(d, true)};
+// --- Stateful Strategy Helpers ---
+inline std::shared_ptr<Trigger> After(std::chrono::milliseconds d) {
+  return std::make_shared<TimerTrigger>(d, false);
 }
 
-inline WhenBinder<TimerTrigger> After(std::chrono::milliseconds d) {
-  return {TimerTrigger(d, false)};
+inline std::shared_ptr<Trigger> Every(std::chrono::milliseconds d) {
+  return std::make_shared<TimerTrigger>(d, true);
 }
 
-// Support for standard chrono literals
-template <typename Rep, typename Period>
-inline WhenBinder<TimerTrigger> Every(std::chrono::duration<Rep, Period> d) {
-  return Every(std::chrono::duration_cast<std::chrono::milliseconds>(d));
+inline std::shared_ptr<Trigger> OnFill(const Order &o) {
+  return std::make_shared<OnFillTrigger>(o.order_id);
 }
 
-template <typename Rep, typename Period>
-inline WhenBinder<TimerTrigger> After(std::chrono::duration<Rep, Period> d) {
-  return After(std::chrono::duration_cast<std::chrono::milliseconds>(d));
+inline std::shared_ptr<Trigger> OnFill(std::string_view order_id) {
+  return std::make_shared<OnFillTrigger>(std::string(order_id));
 }
 
-// --- Workflow Chaining ---
-struct WorkflowChain {
-  ConditionalOrder<Trigger> head;
-  std::pmr::vector<std::shared_ptr<Action>> tail;
-
-  WorkflowChain(
-      ConditionalOrder<Trigger> h,
-      std::pmr::memory_resource *mr = std::pmr::get_default_resource())
-      : head(std::move(h)), tail(mr) {}
-};
-
-inline void operator>>(WorkflowChain chain, ExecutionEngine &engine);
-
-inline WorkflowChain operator>>(ConditionalOrder<Trigger> co,
-                                Order next_order) {
-  WorkflowChain chain(std::move(co));
-  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
-  return chain;
+inline std::shared_ptr<Action> Cancel(std::string_view order_id) {
+  return std::make_shared<CancelAction>(std::string(order_id));
 }
 
-inline WorkflowChain operator>>(WorkflowChain chain, Order next_order) {
-  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
-  return chain;
+inline std::shared_ptr<Action> Cancel(const Order &o) {
+  return std::make_shared<CancelAction>(o.order_id);
 }
 
-// --- Proportional Sizing ---
-struct PctSize {
-  double value;
-};
-
-inline Buy operator*(Buy b, PctSize p) {
-  // Logic handled in ExecutionEngine sizing to avoid context dependency here
-  return b;
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t, Order o) {
+  return {t, std::make_shared<OrderAction>(std::move(o))};
 }
 
-inline PctSize operator"" _pct(long double v) {
-  return {static_cast<double>(v)};
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
+                               std::function<void(ExecutionEngine &)> cb) {
+  return {t, std::make_shared<CallbackAction>(std::move(cb))};
 }
-inline PctSize operator"" _pct(unsigned long long int v) {
-  return {static_cast<double>(v)};
+
+inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
+                               std::shared_ptr<Action> a) {
+  return {t, a};
 }
 
 // Exposure/PnL comparisons
@@ -1018,64 +702,6 @@ operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
 // Batch DSL Entry
 inline std::initializer_list<Order> Batch(std::initializer_list<Order> list) {
   return list;
-}
-
-struct StrategyContext {
-  std::pmr::memory_resource *mr;
-  static StrategyContext &instance() {
-    static thread_local StrategyContext ctx{std::pmr::get_default_resource()};
-    return ctx;
-  }
-};
-
-inline void SetStrategyMemoryResource(std::pmr::memory_resource *mr) {
-  StrategyContext::instance().mr = mr;
-}
-
-// --- Stateful Strategy Helpers ---
-inline Trigger *After(std::chrono::milliseconds d) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) TimerTrigger(d, false);
-}
-
-inline Trigger *Every(std::chrono::milliseconds d) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) TimerTrigger(d, true);
-}
-
-inline Trigger *OnFill(const Order &o) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) OnFillTrigger(o.order_id, mr);
-}
-
-inline Trigger *OnFill(std::string_view order_id) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) OnFillTrigger(order_id, mr);
-}
-
-inline Action *Cancel(std::string_view order_id) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) CancelAction(order_id, mr);
-}
-
-inline Action *Cancel(const Order &o) {
-  auto *mr = StrategyContext::instance().mr;
-  return new (mr) CancelAction(o.order_id, mr);
-}
-
-inline WorkflowStep operator>>(Trigger *t, Order o) {
-  auto *mr = StrategyContext::instance().mr;
-  return {t, new (mr) OrderAction(std::move(o)), mr};
-}
-
-inline WorkflowStep operator>>(Trigger *t,
-                               std::function<void(ExecutionEngine &)> cb) {
-  auto *mr = StrategyContext::instance().mr;
-  return {t, new (mr) CallbackAction(std::move(cb)), mr};
-}
-
-inline WorkflowStep operator>>(Trigger *t, Action *a) {
-  return {t, a, StrategyContext::instance().mr};
 }
 
 } // namespace bop

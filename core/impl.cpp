@@ -63,8 +63,8 @@ void ExecutionEngine::execute_close_positions() {
       // Simple close: Market order in opposite direction
       Order close_order;
       close_order.market = MarketId(market_hash);
-      close_order.quantity = std::abs(qty);
-      close_order.is_buy = (qty < 0);
+      close_order.quantity = Shares(std::abs(qty.raw));
+      close_order.is_buy = (qty.raw < 0);
       close_order.outcome_yes = true; // Simplified
       close_order.backend = b;
       execute_order(close_order);
@@ -83,24 +83,24 @@ void ExecutionEngine::update_order_status(const std::string &id,
   order_store.update_status(id, status);
 }
 
-void ExecutionEngine::add_order_fill(const std::string &id, int qty,
+void ExecutionEngine::add_order_fill(const std::string &id, Shares qty,
                                      Price price) {
-  db.log_fill(id, qty, price);
-  order_store.add_fill(id, qty, price);
-  int64_t simulated_loss = (price.raw * qty) / 100;
+  db.log_fill(id, qty.raw, price);
+  order_store.add_fill(id, qty.raw, price);
+  int64_t simulated_loss = (price.raw * qty.raw) / 100;
   current_daily_pnl_raw -= simulated_loss;
   std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ "
             << price << std::endl;
   check_kill_switch();
 }
 
-int64_t ExecutionEngine::get_volume(MarketId market) const {
+Shares ExecutionEngine::get_volume(MarketId market) const {
   for (auto b : backends_) {
     int64_t v = b->get_volume(market);
     if (v > 0)
-      return v;
+      return Shares(v);
   }
-  return 0;
+  return Shares(0);
 }
 
 // --- LiveExecutionEngine ---
@@ -112,13 +112,13 @@ LiveExecutionEngine::~LiveExecutionEngine() {
   tick_cv.notify_all();
 }
 
-int64_t LiveExecutionEngine::get_position(MarketId market) const {
+Shares LiveExecutionEngine::get_position(MarketId market) const {
   std::lock_guard<std::mutex> lock(state_mtx);
   auto state = current_state;
   if (!state)
-    return 0;
+    return Shares(0);
   auto it = state->positions.find(market.hash);
-  return (it != state->positions.end()) ? it->second : 0;
+  return (it != state->positions.end()) ? Shares(it->second) : Shares(0);
 }
 
 Price LiveExecutionEngine::get_balance() const {
@@ -283,7 +283,7 @@ void StreamingMarketBackend::update_volume(MarketId market, int64_t volume) {
     engine_->trigger_tick();
 }
 
-void StreamingMarketBackend::notify_fill(const std::string &id, int qty,
+void StreamingMarketBackend::notify_fill(const std::string &id, Shares qty,
                                          Price price) {
   if (engine_)
     engine_->add_order_fill(id, qty, price);
