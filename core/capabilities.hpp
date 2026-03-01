@@ -30,4 +30,10 @@ concept IcebergCapable = BackendTraits<T>::supports_iceberg;
 template <typename T>
 concept STPCapable = BackendTraits<T>::supports_stp;
 
+template <typename T>
+concept FOKCapable = BackendTraits<T>::supports_fok;
+
+template <typename T>
+concept IOCCapable = BackendTraits<T>::supports_ioc;
+
 } // namespace bop
