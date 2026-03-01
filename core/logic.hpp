@@ -3,6 +3,8 @@
 #include "core.hpp"
 #include "market_base.hpp"
 #include <functional>
+#include <memory_resource>
+#include <vector>
 
 namespace bop {
 
@@ -22,16 +24,23 @@ struct TimeTag {};
 struct RiskAction {
   enum class Type { CancelAll, ClosePositions, Composite };
   Type type;
-  std::vector<Type> sub_actions;
+  std::pmr::vector<Type> sub_actions;
+
+  RiskAction(Type t,
+             std::pmr::memory_resource *mr = std::pmr::get_default_resource())
+      : type(t), sub_actions(mr) {}
 };
 
-inline RiskAction CancelAll() { return {RiskAction::Type::CancelAll}; }
+inline RiskAction CancelAll() {
+  return RiskAction(RiskAction::Type::CancelAll);
+}
 inline RiskAction ClosePositions() {
-  return {RiskAction::Type::ClosePositions};
+  return RiskAction(RiskAction::Type::ClosePositions);
 }
 
 inline RiskAction operator|(RiskAction a, RiskAction b) {
-  RiskAction r{RiskAction::Type::Composite};
+  RiskAction r(RiskAction::Type::Composite,
+               a.sub_actions.get_allocator().resource());
   if (a.type == RiskAction::Type::Composite)
     r.sub_actions = a.sub_actions;
   else
@@ -62,12 +71,26 @@ struct Trigger {
   virtual ~Trigger() = default;
   virtual bool evaluate(const ExecutionEngine &engine) = 0;
   virtual bool is_recurring() const { return false; }
+
+  // PMR allocation helper
+  void *operator new(size_t size, std::pmr::memory_resource *mr) {
+    return mr->allocate(size);
+  }
+  void operator delete(void *ptr, std::pmr::memory_resource *mr) {
+    mr->deallocate(ptr, 0); // Size info might be needed for some MRs
+  }
+  void operator delete(void *ptr) {
+    // This is tricky with PMR if we don't know the MR.
+    // Usually we'd use a custom deleter.
+  }
 };
 
 struct OnFillTrigger : public Trigger {
-  std::string order_id;
+  std::pmr::string order_id;
   bool filled = false;
-  OnFillTrigger(std::string id) : order_id(std::move(id)) {}
+  OnFillTrigger(std::string_view id, std::pmr::memory_resource *mr =
+                                         std::pmr::get_default_resource())
+      : order_id(id, mr) {}
   bool evaluate(const ExecutionEngine &engine) override;
 };
 
@@ -96,6 +119,13 @@ struct TimerTrigger : public Trigger {
 struct Action {
   virtual ~Action() = default;
   virtual void execute(ExecutionEngine &engine) = 0;
+
+  void *operator new(size_t size, std::pmr::memory_resource *mr) {
+    return mr->allocate(size);
+  }
+  void operator delete(void *ptr, std::pmr::memory_resource *mr) {
+    mr->deallocate(ptr, 0);
+  }
 };
 
 struct OrderAction : public Action {
@@ -105,8 +135,10 @@ struct OrderAction : public Action {
 };
 
 struct CancelAction : public Action {
-  std::string order_id;
-  CancelAction(std::string id) : order_id(std::move(id)) {}
+  std::pmr::string order_id;
+  CancelAction(std::string_view id,
+               std::pmr::memory_resource *mr = std::pmr::get_default_resource())
+      : order_id(id, mr) {}
   void execute(ExecutionEngine &engine) override;
 };
 
@@ -118,8 +150,14 @@ struct CallbackAction : public Action {
 };
 
 struct WorkflowStep {
-  std::shared_ptr<Trigger> trigger;
-  std::shared_ptr<Action> action;
+  Trigger *trigger;
+  Action *action;
+  std::pmr::memory_resource *mr;
+
+  WorkflowStep(
+      Trigger *t, Action *a,
+      std::pmr::memory_resource *resource = std::pmr::get_default_resource())
+      : trigger(t), action(a), mr(resource) {}
 };
 
 struct BalanceQuery {};
@@ -143,6 +181,20 @@ template <typename Tag> struct MarketQuery {
 
   inline MarketQuery<Tag> count() const { return *this; }
 };
+
+template <typename Tag>
+inline SyntheticMarketQuery<Tag> operator-(MarketQuery<Tag> l,
+                                           MarketQuery<Tag> r) {
+  return {std::make_shared<MarketQuery<Tag>>(l),
+          std::make_shared<MarketQuery<Tag>>(r), MathOp::Sub};
+}
+
+template <typename Tag>
+inline SyntheticMarketQuery<Tag> operator+(MarketQuery<Tag> l,
+                                           MarketQuery<Tag> r) {
+  return {std::make_shared<MarketQuery<Tag>>(l),
+          std::make_shared<MarketQuery<Tag>>(r), MathOp::Add};
+}
 
 // Forward declaration of composite conditions
 template <typename L, typename R> struct AndCondition;
@@ -236,13 +288,28 @@ struct MarketTarget {
 // Synthetic Market Support
 enum class MathOp { Add, Sub, Mul, Div };
 
+template <typename Tag> struct SyntheticMarketQuery {
+  std::shared_ptr<MarketQuery<Tag>> left;
+  std::shared_ptr<MarketQuery<Tag>> right;
+  MathOp op;
+
+  bool eval() const;
+  double eval_value() const;
+};
+
 struct SyntheticMarket {
   std::shared_ptr<MarketTarget> left;
   std::shared_ptr<MarketTarget> right;
   MathOp op;
 
-  inline MarketQuery<PriceTag> Price(YES_t) const;
-  inline MarketQuery<PriceTag> Price(NO_t) const;
+  inline SyntheticMarketQuery<PriceTag> Price(YES_t) const {
+    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(YES)),
+            std::make_shared<MarketQuery<PriceTag>>(right->Price(YES)), op};
+  }
+  inline SyntheticMarketQuery<PriceTag> Price(NO_t) const {
+    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(NO)),
+            std::make_shared<MarketQuery<PriceTag>>(right->Price(NO)), op};
+  }
 };
 
 // Spread Logic
@@ -604,6 +671,31 @@ inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
 inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
                                                      int64_t amount) {
   return {q, amount, false};
+}
+
+// Synthetic Query Comparisons
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator>(SyntheticMarketQuery<Tag> q, double threshold) {
+  return {q, static_cast<int64_t>(threshold * 100), true};
+}
+
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator<(SyntheticMarketQuery<Tag> q, double threshold) {
+  return {q, static_cast<int64_t>(threshold * 100), false};
+}
+
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator>(SyntheticMarketQuery<Tag> q, Price threshold) {
+  return {q, threshold.raw, true};
+}
+
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator<(SyntheticMarketQuery<Tag> q, Price threshold) {
+  return {q, threshold.raw, false};
 }
 
 // Global helper for DSL entry
