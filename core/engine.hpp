@@ -23,7 +23,13 @@
 namespace bop {
 
 struct Command {
-  enum class Type { SubmitOrder, CancelOrder, BatchSubmit };
+  enum class Type {
+    SubmitOrder,
+    CancelOrder,
+    BatchSubmit,
+    CancelAll,
+    ClosePositions
+  };
   Type type;
   std::variant<std::monostate, Order, std::string, std::vector<Order>> data;
 };
@@ -52,6 +58,9 @@ struct RiskLimits {
   // Circuit Breakers
   double volatility_threshold = 0.50; // 50% spike in rolling vol
   bool circuit_breakers_enabled = true;
+
+  // Declarative Invariants
+  std::vector<std::function<bool(const ExecutionEngine &)>> dynamic_invariants;
 };
 
 struct VolatilityTracker {
@@ -97,6 +106,7 @@ struct ExecutionEngine {
   mutable std::mutex risk_mtx;
   Database db;
   std::atomic<int64_t> last_tick_time_ns{0};
+  std::function<void()> on_risk_violation;
 
   mutable std::mutex cmd_mtx;
   std::deque<Command> command_queue_;
@@ -122,8 +132,10 @@ struct ExecutionEngine {
         execute_order(std::get<Order>(cmd.data));
       } else if (cmd.type == Command::Type::CancelOrder) {
         execute_cancel(std::get<std::string>(cmd.data));
-      } else if (cmd.type == Command::Type::BatchSubmit) {
-        execute_batch(std::get<std::vector<Order>>(cmd.data));
+      } else if (cmd.type == Command::Type::CancelAll) {
+        execute_cancel_all();
+      } else if (cmd.type == Command::Type::ClosePositions) {
+        execute_close_positions();
       }
     }
   }
@@ -131,6 +143,8 @@ struct ExecutionEngine {
   virtual void execute_order(const Order &o);
   virtual void execute_cancel(const std::string &id);
   virtual void execute_batch(const std::vector<Order> &orders);
+  virtual void execute_cancel_all();
+  virtual void execute_close_positions();
 
   void set_sector(const std::string &ticker, const std::string &sector) {
     market_to_sector[ticker] = sector;
@@ -221,6 +235,16 @@ struct ExecutionEngine {
   // Risk Management
   bool check_risk(const Order &o) const {
     std::lock_guard<std::mutex> lock(risk_mtx);
+
+    // 0. Dynamic Invariants
+    for (const auto &inv : limits.dynamic_invariants) {
+      if (!inv(*this)) {
+        std::cerr << "[RISK] REJECT: Dynamic invariant failed!" << std::endl;
+        if (on_risk_violation)
+          on_risk_violation();
+        return false;
+      }
+    }
 
     // 0. Kill-Switch Check
     if (current_daily_pnl_raw.load() <= -limits.daily_loss_limit.raw) {
@@ -507,6 +531,7 @@ struct LiveEngineState {
 
 class LiveExecutionEngine : public ExecutionEngine {
   std::atomic<std::shared_ptr<const LiveEngineState>> current_state;
+  mutable std::mutex state_mtx;
   std::thread sync_thread;
   std::condition_variable tick_cv;
   std::mutex tick_mtx;
@@ -555,45 +580,87 @@ template <typename Tag> inline bool RelativeCondition<Tag>::eval() const {
   }
 }
 
+template <typename Tag>
+inline double get_query_value(const MarketQuery<Tag> &q) {
+  if constexpr (std::is_same_v<Tag, PriceTag>) {
+    Price val =
+        q.is_universal
+            ? LiveExchange.get_universal_price(q.market, q.outcome_yes)
+            : (q.backend ? q.backend->get_price(q.market, q.outcome_yes)
+                         : LiveExchange.get_price(q.market, q.outcome_yes));
+    return val.to_double();
+  } else if constexpr (std::is_same_v<Tag, VolumeTag>) {
+    return (double)LiveExchange.get_volume(q.market);
+  } else if constexpr (std::is_same_v<Tag, PositionTag>) {
+    return (double)LiveExchange.get_position(q.market);
+  }
+  return 0.0;
+}
+
+template <typename Tag>
+inline double SyntheticMarketQuery<Tag>::eval_value() const {
+  double l = left ? get_query_value(*left) : 0.0;
+  double r = right ? get_query_value(*right) : 0.0;
+  switch (op) {
+  case MathOp::Add:
+    return l + r;
+  case MathOp::Sub:
+    return l - r;
+  case MathOp::Mul:
+    return l * r;
+  case MathOp::Div:
+    return r != 0 ? l / r : 0.0;
+  }
+  return 0.0;
+}
+
+template <typename Tag> inline bool SyntheticMarketQuery<Tag>::eval() const {
+  return eval_value() > 0; // Default eval
+}
+
 template <typename Tag, typename Q>
 inline bool Condition<Tag, Q>::eval() const {
-  if constexpr (std::is_same_v<Tag, PositionTag>) {
-    int64_t val = LiveExchange.get_position(query.market);
-    return is_greater ? val > threshold : val < threshold;
-  } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
-    Price val = LiveExchange.get_balance();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
-    Price val = LiveExchange.get_exposure();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, PnLTag>) {
-    Price val = LiveExchange.get_pnl();
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, PriceTag>) {
-    Price val =
-        query.is_universal
-            ? LiveExchange.get_universal_price(query.market, query.outcome_yes)
-            : (query.backend
-                   ? query.backend->get_price(query.market, query.outcome_yes)
-                   : LiveExchange.get_price(query.market, query.outcome_yes));
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, DepthTag>) {
-    Price val =
-        query.is_universal
-            ? LiveExchange.get_universal_depth(query.market, query.outcome_yes)
-            : (query.backend
-                   ? query.backend->get_depth(query.market, query.outcome_yes)
-                   : LiveExchange.get_depth(query.market, query.outcome_yes));
-    return is_greater ? val.raw > threshold : val.raw < threshold;
-  } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
-    size_t val = LiveExchange.get_open_order_count(query.market);
-    return is_greater ? val > (size_t)threshold : val < (size_t)threshold;
-  } else if constexpr (std::is_same_v<Tag, PortfolioTag>) {
-    double val = LiveExchange.get_portfolio_metric(query.metric);
-    int64_t scaled_val = static_cast<int64_t>(val * 1000000);
-    return is_greater ? scaled_val > threshold : scaled_val < threshold;
+  double val = 0;
+  if constexpr (std::is_same_v<Q, SyntheticMarketQuery<Tag>>) {
+    val = query.eval_value() *
+          100.0; // Scale back to "cents" for threshold comparison
+  } else {
+    // Original logic for MarketQuery
+    if constexpr (std::is_same_v<Tag, PositionTag>) {
+      val = (double)LiveExchange.get_position(query.market);
+    } else if constexpr (std::is_same_v<Tag, BalanceTag>) {
+      val = (double)LiveExchange.get_balance().raw;
+    } else if constexpr (std::is_same_v<Tag, ExposureTag>) {
+      val = (double)LiveExchange.get_exposure().raw;
+    } else if constexpr (std::is_same_v<Tag, PnLTag>) {
+      val = (double)LiveExchange.get_pnl().raw;
+    } else if constexpr (std::is_same_v<Tag, PriceTag>) {
+      val = (double)(query.is_universal
+                         ? LiveExchange.get_universal_price(query.market,
+                                                            query.outcome_yes)
+                         : (query.backend
+                                ? query.backend->get_price(query.market,
+                                                           query.outcome_yes)
+                                : LiveExchange.get_price(query.market,
+                                                         query.outcome_yes)))
+                .raw;
+    } else if constexpr (std::is_same_v<Tag, DepthTag>) {
+      val = (double)(query.is_universal
+                         ? LiveExchange.get_universal_depth(query.market,
+                                                            query.outcome_yes)
+                         : (query.backend
+                                ? query.backend->get_depth(query.market,
+                                                           query.outcome_yes)
+                                : LiveExchange.get_depth(query.market,
+                                                         query.outcome_yes)))
+                .raw;
+    } else if constexpr (std::is_same_v<Tag, OpenOrdersTag>) {
+      val = (double)LiveExchange.get_open_order_count(query.market);
+    } else if constexpr (std::is_same_v<Tag, PortfolioTag>) {
+      val = LiveExchange.get_portfolio_metric(query.metric) * 1000000;
+    }
   }
-  return false;
+  return is_greater ? (int64_t)val > threshold : (int64_t)val < threshold;
 }
 
 template <typename T>
@@ -623,6 +690,52 @@ PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
   return false;
 }
 
+class PersistentStrategy : public bop::ExecutionStrategy,
+                           public bop::StrategyCRTP<PersistentStrategy> {
+  std::vector<WorkflowStep> steps;
+  std::mutex steps_mtx;
+
+public:
+  PersistentStrategy() : steps() {}
+  PersistentStrategy(WorkflowStep step) { steps.push_back(std::move(step)); }
+  PersistentStrategy(std::vector<WorkflowStep> s) : steps(std::move(s)) {}
+
+  void add_step(WorkflowStep step) {
+    std::lock_guard<std::mutex> lock(steps_mtx);
+    steps.push_back(std::move(step));
+  }
+
+  bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
+  bool tick_impl(ExecutionEngine &engine) {
+    std::lock_guard<std::mutex> lock(steps_mtx);
+    for (size_t i = 0; i < steps.size();) {
+      if (steps[i].trigger->evaluate(engine)) {
+        steps[i].action->execute(engine);
+        if (!steps[i].trigger->is_recurring()) {
+          steps[i] = std::move(steps.back());
+          steps.pop_back();
+          continue;
+        }
+      }
+      ++i;
+    }
+    return steps.empty();
+  }
+
+  void on_market_event(ExecutionEngine &engine, MarketId m, Price p,
+                       int64_t q) override {
+    on_market_event_impl(engine, m, p, q);
+  }
+  void on_market_event_impl(ExecutionEngine &, MarketId, Price, int64_t) {}
+
+  void on_execution_event(ExecutionEngine &engine, const std::string &id,
+                          OrderStatus s) override {
+    on_execution_event_impl(engine, id, s);
+  }
+  void on_execution_event_impl(ExecutionEngine &engine, const std::string &id,
+                               OrderStatus s);
+};
+
 template <typename T>
 inline void operator>>(const bop::ConditionalOrder<T> &co,
                        bop::ExecutionEngine &engine) {
@@ -631,9 +744,38 @@ inline void operator>>(const bop::ConditionalOrder<T> &co,
   bop::GlobalAlgoManager.create_strategy<PersistentConditionalStrategy<T>>(co);
 }
 
+inline void operator>>(WorkflowStep step, ExecutionEngine &engine) {
+  std::cout << "[STRATEGY] Registering stateful workflow step..." << std::endl;
+  GlobalAlgoManager.create_strategy<PersistentStrategy>(std::move(step));
+}
+
 // Forward declare restored Operators
 void operator>>(const Order &o, ExecutionEngine &engine);
 void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine);
 void operator>>(const OCOOrder &oco, ExecutionEngine &engine);
+
+template <typename T> void StrategyProxy::invariant(T &&condition) {
+  LiveExchange.limits.dynamic_invariants.push_back(
+      [cond = std::forward<T>(condition)](const ExecutionEngine &engine) {
+        return cond.eval();
+      });
+}
+
+inline void operator>>(RiskViolationTrigger, RiskAction action) {
+  LiveExchange.on_risk_violation = [action]() {
+    if (action.type == RiskAction::Type::CancelAll) {
+      LiveExchange.submit_command({Command::Type::CancelAll});
+    } else if (action.type == RiskAction::Type::ClosePositions) {
+      LiveExchange.submit_command({Command::Type::ClosePositions});
+    } else if (action.type == RiskAction::Type::Composite) {
+      for (auto t : action.sub_actions) {
+        if (t == RiskAction::Type::CancelAll)
+          LiveExchange.submit_command({Command::Type::CancelAll});
+        else if (t == RiskAction::Type::ClosePositions)
+          LiveExchange.submit_command({Command::Type::ClosePositions});
+      }
+    }
+  };
+}
 
 } // namespace bop
