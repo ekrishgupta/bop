@@ -3,7 +3,6 @@
 #include "core.hpp"
 #include "market_base.hpp"
 #include <functional>
-#include <immintrin.h>
 #include <memory_resource>
 #include <vector>
 
@@ -23,22 +22,63 @@ struct FairPriceTag {};
 struct OpenOrdersTag {};
 struct PortfolioTag {};
 struct TimeTag {};
-struct TicksTag {};
+
+struct RiskAction {
+  enum class Type { CancelAll, ClosePositions, Composite };
+  Type type;
+  std::pmr::vector<Type> sub_actions;
+
+  RiskAction(Type t,
+             std::pmr::memory_resource *mr = std::pmr::get_default_resource())
+      : type(t), sub_actions(mr) {}
+};
+
+inline RiskAction CancelAll() {
+  return RiskAction(RiskAction::Type::CancelAll);
+}
+inline RiskAction ClosePositions() {
+  return RiskAction(RiskAction::Type::ClosePositions);
+}
+
+inline RiskAction operator|(RiskAction a, RiskAction b) {
+  RiskAction r(RiskAction::Type::Composite,
+               a.sub_actions.get_allocator().resource());
+  if (a.type == RiskAction::Type::Composite)
+    r.sub_actions = a.sub_actions;
+  else
+    r.sub_actions.push_back(a.type);
+  if (b.type == RiskAction::Type::Composite)
+    r.sub_actions.insert(r.sub_actions.end(), b.sub_actions.begin(),
+                         b.sub_actions.end());
+  else
+    r.sub_actions.push_back(b.type);
+  return r;
+}
+
+struct RiskViolationTrigger {};
+inline RiskViolationTrigger OnRiskViolation() { return {}; }
+
+struct StrategyProxy {
+  template <typename T> void invariant(T &&condition);
+};
+extern StrategyProxy Strategy;
+
+struct RiskQuery {
+  enum class Type { Exposure, PnL };
+  Type type;
+};
 
 // --- Stateful Strategy Triggers ---
 struct Trigger {
   virtual ~Trigger() = default;
   virtual bool evaluate(const ExecutionEngine &engine) = 0;
   virtual bool is_recurring() const { return false; }
-
-  // PMR allocation helpers are usually in the MR itself, but let's keep it
-  // simple
 };
 
 struct OnFillTrigger : public Trigger {
   std::string order_id;
   bool filled = false;
-  OnFillTrigger(std::string_view id) : order_id(id) {}
+  OnFillTrigger(std::string id) : order_id(std::move(id)) {}
   bool evaluate(const ExecutionEngine &engine) override;
 };
 
@@ -77,7 +117,7 @@ struct OrderAction : public Action {
 
 struct CancelAction : public Action {
   std::string order_id;
-  CancelAction(std::string_view id) : order_id(id) {}
+  CancelAction(std::string id) : order_id(std::move(id)) {}
   void execute(ExecutionEngine &engine) override;
 };
 
@@ -91,11 +131,6 @@ struct CallbackAction : public Action {
 struct WorkflowStep {
   std::shared_ptr<Trigger> trigger;
   std::shared_ptr<Action> action;
-};
-
-struct RiskQuery {
-  enum class Type { Exposure, PnL };
-  Type type;
 };
 
 struct BalanceQuery {};
@@ -176,38 +211,69 @@ struct MarketTarget {
     return {r.market, false, r.backend, r.is_universal};
   }
 
+  inline MarketQuery<MidpointTag> Midpoint() const {
+    auto r = resolve();
+    return {r.market, true, r.backend, r.is_universal};
+  }
+
+  inline MarketQuery<FairPriceTag> FairPrice() const {
+    auto r = resolve();
+    return {r.market, true, r.backend, r.is_universal};
+  }
   // Event Hooks
   inline MarketId OnTrade() const { return resolve().market; }
+};
 
-  struct EventBinder {
-    MarketId market;
-    enum class Type { Fill, Cancel, Error } type;
-  };
+// Synthetic Market Support
+enum class MathOp { Add, Sub, Mul, Div };
 
-  inline EventBinder OnFill() const {
-    return {resolve().market, EventBinder::Type::Fill};
-  }
-  inline EventBinder OnCancel() const {
-    return {resolve().market, EventBinder::Type::Cancel};
-  }
-  inline EventBinder OnError() const {
-    return {resolve().market, EventBinder::Type::Error};
-  }
+template <typename Tag> struct SyntheticMarketQuery {
+  std::shared_ptr<MarketQuery<Tag>> left;
+  std::shared_ptr<MarketQuery<Tag>> right;
+  MathOp op;
 
-  // WebSocket Streaming Entry Points
-  inline void
-  OnOrderbook(std::function<void(const OrderBook &)> callback) const {
-    auto r = resolve();
-    if (r.backend)
-      r.backend->ws_subscribe_orderbook(r.market, callback);
-  }
+  bool eval() const;
+  double eval_value() const;
+};
 
-  inline void OnTrade(std::function<void(bop::Price, int64_t)> callback) const {
-    auto r = resolve();
-    if (r.backend)
-      r.backend->ws_subscribe_trades(r.market, callback);
+struct SyntheticMarket {
+  std::shared_ptr<MarketTarget> left;
+  std::shared_ptr<MarketTarget> right;
+  MathOp op;
+
+  inline SyntheticMarketQuery<PriceTag> Price(YES_t) const {
+    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(YES)),
+            std::make_shared<MarketQuery<PriceTag>>(right->Price(YES)), op};
+  }
+  inline SyntheticMarketQuery<PriceTag> Price(NO_t) const {
+    return {std::make_shared<MarketQuery<PriceTag>>(left->Price(NO)),
+            std::make_shared<MarketQuery<PriceTag>>(right->Price(NO)), op};
   }
 };
+
+template <typename Tag>
+inline SyntheticMarketQuery<Tag> operator-(MarketQuery<Tag> l,
+                                           MarketQuery<Tag> r) {
+  return {std::make_shared<MarketQuery<Tag>>(l),
+          std::make_shared<MarketQuery<Tag>>(r), MathOp::Sub};
+}
+
+template <typename Tag>
+inline SyntheticMarketQuery<Tag> operator+(MarketQuery<Tag> l,
+                                           MarketQuery<Tag> r) {
+  return {std::make_shared<MarketQuery<Tag>>(l),
+          std::make_shared<MarketQuery<Tag>>(r), MathOp::Add};
+}
+
+inline SyntheticMarket operator-(MarketTarget a, MarketTarget b) {
+  return {std::make_shared<MarketTarget>(a.resolve()),
+          std::make_shared<MarketTarget>(b.resolve()), MathOp::Sub};
+}
+
+inline SyntheticMarket operator+(MarketTarget a, MarketTarget b) {
+  return {std::make_shared<MarketTarget>(a.resolve()),
+          std::make_shared<MarketTarget>(b.resolve()), MathOp::Add};
+}
 
 // Spread Logic
 struct SpreadTarget {
@@ -228,12 +294,6 @@ struct SpreadTarget {
   }
 };
 
-inline SpreadTarget operator-(MarketTarget a, MarketTarget b) {
-  auto ra = a.resolve();
-  auto rb = b.resolve();
-  return {ra.market, rb.market, ra.backend};
-}
-
 struct MarketBoundSpread {
   Shares quantity;
   bool is_buy;
@@ -241,6 +301,19 @@ struct MarketBoundSpread {
   int64_t timestamp_ns;
   const MarketBackend *backend = nullptr;
 };
+
+inline SpreadTarget ToSpread(const SyntheticMarket &s) {
+  return {s.left->market, s.right->market, s.left->backend};
+}
+
+inline MarketBoundSpread operator/(const Buy &b, const SyntheticMarket &s) {
+  return {b.quantity, true, ToSpread(s), b.timestamp_ns, s.left->backend};
+}
+
+inline MarketBoundSpread operator/(const Sell &s, const SyntheticMarket &s_in) {
+  return {s.quantity, false, ToSpread(s_in), s.timestamp_ns,
+          s_in.left->backend};
+}
 
 inline MarketBoundSpread operator/(const Buy &b, SpreadTarget spread) {
   auto rs = spread.resolve();
@@ -464,12 +537,12 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
   return {std::move(w.condition), o};
 }
 
-inline MarketBoundOrder operator/(const Buy &b, MarketTarget target) {
+inline MarketBoundOrder<> operator/(const Buy &b, MarketTarget target) {
   auto r = target.resolve();
   return {b.quantity, true, r.market, b.timestamp_ns, r.backend};
 }
 
-inline MarketBoundOrder operator/(const Sell &s, MarketTarget target) {
+inline MarketBoundOrder<> operator/(const Sell &s, MarketTarget target) {
   auto r = target.resolve();
   return {s.quantity, false, r.market, s.timestamp_ns, r.backend};
 }
@@ -503,11 +576,11 @@ inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
 }
 
 // Volume Comparisons
-inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int t) {
-  return {q, static_cast<int64_t>(t), true};
+inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int64_t t) {
+  return {q, t, true};
 }
-inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int t) {
-  return {q, static_cast<int64_t>(t), false};
+inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int64_t t) {
+  return {q, t, false};
 }
 
 // Depth Comparisons
@@ -586,6 +659,21 @@ inline Condition<PnLTag, RiskQuery> PnL() {
   return {{RiskQuery::Type::PnL}, 0, false};
 }
 
+inline Condition<PositionTag> MaxPosition(int64_t shares) {
+  return Condition<PositionTag>(MarketQuery<PositionTag>{MarketId(0u), true},
+                                shares, false);
+}
+
+inline Condition<PnLTag, RiskQuery> DailyLossLimit(Price p) {
+  return Condition<PnLTag, RiskQuery>(RiskQuery{RiskQuery::Type::PnL}, -p.raw,
+                                      true);
+}
+
+inline Condition<ExposureTag, RiskQuery> MaxExposure(Price p) {
+  return Condition<ExposureTag, RiskQuery>(RiskQuery{RiskQuery::Type::Exposure},
+                                           p.raw, false);
+}
+
 inline bop::Spread Spread(Price p) { return bop::Spread(p); }
 inline bop::Offset Offset(ReferencePrice r) { return bop::Offset(r); }
 
@@ -652,56 +740,101 @@ inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p,
           false};
 }
 
-// --- Stateful Strategy Helpers ---
-inline std::shared_ptr<Trigger> After(std::chrono::milliseconds d) {
-  return std::make_shared<TimerTrigger>(d, false);
+// --- Temporal Helpers ---
+inline WhenBinder<TimerTrigger> Every(std::chrono::milliseconds d) {
+  return {TimerTrigger(d, true)};
 }
 
-inline std::shared_ptr<Trigger> Every(std::chrono::milliseconds d) {
-  return std::make_shared<TimerTrigger>(d, true);
+inline WhenBinder<TimerTrigger> After(std::chrono::milliseconds d) {
+  return {TimerTrigger(d, false)};
 }
 
-inline std::shared_ptr<Trigger> OnFill(const Order &o) {
-  return std::make_shared<OnFillTrigger>(o.order_id);
+// Support for standard chrono literals
+template <typename Rep, typename Period>
+inline WhenBinder<TimerTrigger> Every(std::chrono::duration<Rep, Period> d) {
+  return Every(std::chrono::duration_cast<std::chrono::milliseconds>(d));
 }
 
-inline std::shared_ptr<Trigger> OnFill(std::string_view order_id) {
-  return std::make_shared<OnFillTrigger>(std::string(order_id));
+template <typename Rep, typename Period>
+inline WhenBinder<TimerTrigger> After(std::chrono::duration<Rep, Period> d) {
+  return After(std::chrono::duration_cast<std::chrono::milliseconds>(d));
 }
 
-inline std::shared_ptr<Action> Cancel(std::string_view order_id) {
-  return std::make_shared<CancelAction>(std::string(order_id));
+// --- Workflow Chaining ---
+template <typename T> struct WorkflowChain {
+  ConditionalOrder<T> head;
+  std::pmr::vector<std::shared_ptr<Action>> tail;
+
+  WorkflowChain(ConditionalOrder<T> h, std::pmr::memory_resource *mr =
+                                           std::pmr::get_default_resource())
+      : head(std::move(h)), tail(mr) {}
+};
+
+template <typename T>
+inline void operator>>(WorkflowChain<T> chain, ExecutionEngine &engine);
+
+template <typename T>
+inline WorkflowChain<T> operator>>(ConditionalOrder<T> co, Order next_order) {
+  WorkflowChain<T> chain(std::move(co));
+  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
+  return chain;
 }
 
-inline std::shared_ptr<Action> Cancel(const Order &o) {
-  return std::make_shared<CancelAction>(o.order_id);
+template <typename T>
+inline WorkflowChain<T> operator>>(WorkflowChain<T> chain, Order next_order) {
+  chain.tail.push_back(std::make_shared<OrderAction>(std::move(next_order)));
+  return chain;
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t, Order o) {
-  return {t, std::make_shared<OrderAction>(std::move(o))};
+// --- Proportional Sizing ---
+struct PctSize {
+  double value;
+};
+
+inline Buy operator*(Buy b, PctSize p) { return b; }
+
+inline PctSize operator"" _pct(long double v) {
+  return {static_cast<double>(v)};
+}
+inline PctSize operator"" _pct(unsigned long long int v) {
+  return {static_cast<double>(v)};
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
-                               std::function<void(ExecutionEngine &)> cb) {
-  return {t, std::make_shared<CallbackAction>(std::move(cb))};
+struct StrategyContext {
+  std::pmr::memory_resource *mr;
+  static StrategyContext &instance() {
+    static thread_local StrategyContext ctx{std::pmr::get_default_resource()};
+    return ctx;
+  }
+};
+
+inline void SetStrategyMemoryResource(std::pmr::memory_resource *mr) {
+  StrategyContext::instance().mr = mr;
 }
 
-inline WorkflowStep operator>>(std::shared_ptr<Trigger> t,
-                               std::shared_ptr<Action> a) {
-  return {t, a};
+// Synthetic Query Comparisons (Restored)
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator>(SyntheticMarketQuery<Tag> q, double threshold) {
+  return {q, static_cast<int64_t>(threshold * 100), true};
 }
 
-// Exposure/PnL comparisons
-inline Condition<ExposureTag, RiskQuery>
-operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
-  c.threshold = threshold;
-  c.is_greater = false;
-  return c;
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator<(SyntheticMarketQuery<Tag> q, double threshold) {
+  return {q, static_cast<int64_t>(threshold * 100), false};
 }
 
-// Batch DSL Entry
-inline std::initializer_list<Order> Batch(std::initializer_list<Order> list) {
-  return list;
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator>(SyntheticMarketQuery<Tag> q, Price threshold) {
+  return {q, threshold.raw, true};
+}
+
+template <typename Tag>
+inline Condition<Tag, SyntheticMarketQuery<Tag>>
+operator<(SyntheticMarketQuery<Tag> q, Price threshold) {
+  return {q, threshold.raw, false};
 }
 
 } // namespace bop
