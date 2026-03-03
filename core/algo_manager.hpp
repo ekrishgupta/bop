@@ -216,8 +216,10 @@ public:
   void broadcast_execution_event(ExecutionEngine &engine, const std::string &id,
                                  OrderStatus s) {
     std::lock_guard<std::mutex> lock(mtx);
-    for (auto &strat : active_strategies)
-      strat->on_execution_event(engine, id, s);
+    for (auto algo : active_strategies)
+      algo->on_execution_event(engine, id, s);
+    for (auto algo : pending_strategies)
+      algo->on_execution_event(engine, id, s);
   }
 
 private:
