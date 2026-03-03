@@ -33,6 +33,7 @@ struct Iceberg {
     if (qty <= 0)
       throw std::invalid_argument("Iceberg display quantity must be positive");
   }
+  explicit Iceberg(Shares qty) : display_qty(qty.raw) {}
 };
 
 struct TWAP {
