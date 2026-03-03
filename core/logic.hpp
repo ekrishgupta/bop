@@ -8,8 +8,11 @@
 
 namespace bop {
 
+class ExecutionEngine;
+
 // Query Tags
 struct PriceTag {};
+
 struct VolumeTag {};
 struct PositionTag {};
 struct BalanceTag {};
@@ -159,12 +162,12 @@ template <typename Tag> struct MarketQuery {
 template <typename L, typename R> struct AndCondition;
 template <typename L, typename R> struct OrCondition;
 
-struct MarketTarget {
+template <typename B = MarketBackend> struct MarketTarget {
   MarketId market;
-  const MarketBackend *backend = nullptr;
+  const B *backend = nullptr;
   bool is_universal = false;
 
-  MarketTarget resolve() const {
+  MarketTarget<B> resolve() const {
     if (backend && !market.resolved) {
       std::string id = backend->resolve_ticker(market.ticker);
       if (id != market.ticker) {
@@ -174,7 +177,11 @@ struct MarketTarget {
     return *this;
   }
 
-  inline MarketTarget Universal() const {
+  MarketTarget<MarketBackend> to_base() const {
+    return {market, static_cast<const MarketBackend *>(backend), is_universal};
+  }
+
+  inline MarketTarget<B> Universal() const {
     auto r = *this;
     r.is_universal = true;
     return r;
@@ -237,8 +244,8 @@ template <typename Tag> struct SyntheticMarketQuery {
 };
 
 struct SyntheticMarket {
-  std::shared_ptr<MarketTarget> left;
-  std::shared_ptr<MarketTarget> right;
+  std::shared_ptr<MarketTarget<MarketBackend>> left;
+  std::shared_ptr<MarketTarget<MarketBackend>> right;
   MathOp op;
 
   inline SyntheticMarketQuery<PriceTag> Price(YES_t) const {
@@ -265,14 +272,18 @@ inline SyntheticMarketQuery<Tag> operator+(MarketQuery<Tag> l,
           std::make_shared<MarketQuery<Tag>>(r), MathOp::Add};
 }
 
-inline SyntheticMarket operator-(MarketTarget a, MarketTarget b) {
-  return {std::make_shared<MarketTarget>(a.resolve()),
-          std::make_shared<MarketTarget>(b.resolve()), MathOp::Sub};
+template <typename B1, typename B2>
+inline SyntheticMarket operator-(MarketTarget<B1> a, MarketTarget<B2> b) {
+  return {std::make_shared<MarketTarget<MarketBackend>>(a.resolve().to_base()),
+          std::make_shared<MarketTarget<MarketBackend>>(b.resolve().to_base()),
+          MathOp::Sub};
 }
 
-inline SyntheticMarket operator+(MarketTarget a, MarketTarget b) {
-  return {std::make_shared<MarketTarget>(a.resolve()),
-          std::make_shared<MarketTarget>(b.resolve()), MathOp::Add};
+template <typename B1, typename B2>
+inline SyntheticMarket operator+(MarketTarget<B1> a, MarketTarget<B2> b) {
+  return {std::make_shared<MarketTarget<MarketBackend>>(a.resolve().to_base()),
+          std::make_shared<MarketTarget<MarketBackend>>(b.resolve().to_base()),
+          MathOp::Add};
 }
 
 // Spread Logic
@@ -347,7 +358,9 @@ struct SORTarget {
   const MarketBackend *b2;
 };
 
-inline SORTarget operator|(const MarketTarget &a, const MarketTarget &b) {
+template <typename B1, typename B2>
+inline SORTarget operator|(const MarketTarget<B1> &a,
+                           const MarketTarget<B2> &b) {
   return {a.market.ticker, a.backend, b.backend};
 }
 
@@ -390,26 +403,30 @@ inline Order operator/(const SORBoundOrder &m, NO_t) {
   return o;
 }
 
-struct MarketBoundQuote {
+template <typename B = MarketBackend> struct MarketBoundQuote {
   Shares quantity;
   MarketId market;
   int64_t timestamp_ns;
-  const MarketBackend *backend = nullptr;
+  const B *backend = nullptr;
   Price spread = Price::from_cents(2);
   ReferencePrice ref = ReferencePrice::Mid;
 };
 
-inline MarketBoundQuote operator/(const Quote &q, MarketId market) {
-  return MarketBoundQuote{q.quantity, market, q.timestamp_ns};
+inline MarketBoundQuote<MarketBackend> operator/(const Quote &q,
+                                                 MarketId market) {
+  return MarketBoundQuote<MarketBackend>{q.quantity, market, q.timestamp_ns};
 }
 
-inline MarketBoundQuote operator/(const Quote &q, const char *market) {
-  return MarketBoundQuote{q.quantity, MarketId(market), q.timestamp_ns};
+inline MarketBoundQuote<MarketBackend> operator/(const Quote &q,
+                                                 const char *market) {
+  return MarketBoundQuote<MarketBackend>{q.quantity, MarketId(market),
+                                         q.timestamp_ns};
 }
 
-inline MarketBoundQuote operator/(const Quote &q, MarketTarget target) {
+template <typename B>
+inline MarketBoundQuote<B> operator/(const Quote &q, MarketTarget<B> target) {
   auto r = target.resolve();
-  return MarketBoundQuote{q.quantity, r.market, q.timestamp_ns, r.backend};
+  return MarketBoundQuote<B>{q.quantity, r.market, q.timestamp_ns, r.backend};
 }
 
 struct Spread {
@@ -417,7 +434,8 @@ struct Spread {
   explicit Spread(Price p) : value(p) {}
 };
 
-inline MarketBoundQuote operator|(MarketBoundQuote q, Spread s) {
+template <typename B>
+inline MarketBoundQuote<B> operator|(MarketBoundQuote<B> q, Spread s) {
   q.spread = s.value;
   return q;
 }
@@ -427,14 +445,11 @@ struct Offset {
   explicit Offset(ReferencePrice r) : ref(r) {}
 };
 
-inline MarketBoundQuote operator|(MarketBoundQuote q, Offset o) {
+template <typename B>
+inline MarketBoundQuote<B> operator|(MarketBoundQuote<B> q, Offset o) {
   q.ref = o.ref;
   return q;
 }
-
-class ExecutionEngine;
-
-inline Order operator>>(MarketBoundQuote q, ExecutionEngine &engine);
 
 template <typename Tag, typename Q = MarketQuery<Tag>> struct Condition {
   Q query;
@@ -537,12 +552,25 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w, const Order &o) {
   return {std::move(w.condition), o};
 }
 
-inline MarketBoundOrder<> operator/(const Buy &b, MarketTarget target) {
+template <typename T, typename B>
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w, DetailedOrder<B> &&o) {
+  return {std::move(w.condition), std::move(o)};
+}
+
+template <typename T, typename B>
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w,
+                                      const DetailedOrder<B> &o) {
+  return {std::move(w.condition), o};
+}
+
+template <typename B>
+inline MarketBoundOrder<B> operator/(const Buy &b, MarketTarget<B> target) {
   auto r = target.resolve();
   return {b.quantity, true, r.market, b.timestamp_ns, r.backend};
 }
 
-inline MarketBoundOrder<> operator/(const Sell &s, MarketTarget target) {
+template <typename B>
+inline MarketBoundOrder<B> operator/(const Sell &s, MarketTarget<B> target) {
   auto r = target.resolve();
   return {s.quantity, false, r.market, s.timestamp_ns, r.backend};
 }
@@ -576,63 +604,98 @@ inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
 }
 
 // Volume Comparisons
-inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, int64_t t) {
-  return {q, t, true};
+inline Condition<VolumeTag> operator>(MarketQuery<VolumeTag> q, Shares t) {
+  return {q, t.raw, true};
 }
-inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, int64_t t) {
-  return {q, t, false};
+inline Condition<VolumeTag> operator<(MarketQuery<VolumeTag> q, Shares t) {
+  return {q, t.raw, false};
 }
 
 // Depth Comparisons
-inline Condition<DepthTag> operator<(MarketQuery<DepthTag> q,
-                                     int64_t threshold) {
-  return {q, threshold, false};
+inline Condition<DepthTag> operator<(MarketQuery<DepthTag> q, Price threshold) {
+  return {q, threshold.raw, false};
 }
-inline Condition<DepthTag> operator>(MarketQuery<DepthTag> q,
-                                     int64_t threshold) {
-  return {q, threshold, true};
+inline Condition<DepthTag> operator>(MarketQuery<DepthTag> q, Price threshold) {
+  return {q, threshold.raw, true};
 }
 
 // Position comparisons
 inline Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
-                                        int64_t shares) {
-  return {q, shares, true};
+                                        Shares shares) {
+  return {q, shares.raw, true};
 }
 inline Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
-                                        int64_t shares) {
-  return {q, shares, false};
+                                        Shares shares) {
+  return {q, shares.raw, false};
+}
+inline Condition<PositionTag> operator>(MarketQuery<PositionTag> q,
+                                        int shares) {
+  return {q, Shares(shares).raw, true};
+}
+inline Condition<PositionTag> operator<(MarketQuery<PositionTag> q,
+                                        int shares) {
+  return {q, Shares(shares).raw, false};
 }
 
 // Balance comparisons
 inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
-                                                     int64_t amount) {
-  return {q, amount, true};
+                                                     Price amount) {
+  return {q, amount.raw, true};
 }
 inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
-                                                     int64_t amount) {
-  return {q, amount, false};
+                                                     Price amount) {
+  return {q, amount.raw, false};
+}
+inline Condition<BalanceTag, BalanceQuery> operator>(BalanceQuery q,
+                                                     double amount) {
+  return {q, Price::from_usd(amount).raw, true};
+}
+inline Condition<BalanceTag, BalanceQuery> operator<(BalanceQuery q,
+                                                     double amount) {
+  return {q, Price::from_usd(amount).raw, false};
+}
+
+// Exposure/PnL comparisons
+inline Condition<ExposureTag, RiskQuery>
+operator<(Condition<ExposureTag, RiskQuery> c, long long threshold) {
+  c.threshold = threshold;
+  c.is_greater = false;
+  return c;
+}
+inline Condition<ExposureTag, RiskQuery>
+operator>(Condition<ExposureTag, RiskQuery> c, long long threshold) {
+  c.threshold = threshold;
+  c.is_greater = true;
+  return c;
 }
 
 // Global helper for DSL entry
-inline MarketTarget Market(MarketId mkt) { return {mkt, nullptr, false}; }
-inline MarketTarget Market(const char *name) {
+template <typename B = MarketBackend>
+inline MarketTarget<B> Market(MarketId mkt) {
+  return {mkt, nullptr, false};
+}
+template <typename B = MarketBackend>
+inline MarketTarget<B> Market(const char *name) {
   return {MarketId(name), nullptr, false};
 }
 
-inline MarketTarget UniversalMarket(const char *name) {
+template <typename B = MarketBackend>
+inline MarketTarget<B> UniversalMarket(const char *name) {
   return {MarketId(name), nullptr, true};
 }
 
-inline MarketTarget Market(MarketId mkt, const MarketBackend &b) {
-  return MarketTarget{mkt, &b, false}.resolve();
+template <typename B> inline MarketTarget<B> Market(MarketId mkt, const B &b) {
+  return MarketTarget<B>{mkt, &b, false}.resolve();
 }
-inline MarketTarget Market(const char *name, const MarketBackend &b) {
-  return MarketTarget{MarketId(name), &b, false}.resolve();
+template <typename B>
+inline MarketTarget<B> Market(const char *name, const B &b) {
+  return MarketTarget<B>{MarketId(name), &b, false}.resolve();
 }
 
-inline MarketQuery<PositionTag> Position(MarketTarget target) {
+template <typename B>
+inline MarketQuery<PositionTag> Position(MarketTarget<B> target) {
   auto r = target.resolve();
-  return {r.market, true, r.backend};
+  return {r.market, true, r.backend, r.is_universal};
 }
 
 inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
@@ -640,8 +703,9 @@ inline MarketQuery<PositionTag> Position(MarketId mkt) { return {mkt, true}; }
 inline MarketQuery<OpenOrdersTag> OpenOrders(MarketId mkt) {
   return {mkt, true};
 }
-inline MarketQuery<OpenOrdersTag> OpenOrders(const MarketTarget &mt) {
-  return {mt.market, true};
+template <typename B>
+inline MarketQuery<OpenOrdersTag> OpenOrders(const MarketTarget<B> &mt) {
+  return {mt.market, true, mt.backend};
 }
 
 inline Condition<OpenOrdersTag> operator<(MarketQuery<OpenOrdersTag> q,
@@ -835,6 +899,12 @@ template <typename Tag>
 inline Condition<Tag, SyntheticMarketQuery<Tag>>
 operator<(SyntheticMarketQuery<Tag> q, Price threshold) {
   return {q, threshold.raw, false};
+}
+
+// Batch DSL Entry
+template <typename T>
+inline std::vector<Order> Batch(std::initializer_list<T> list) {
+  return std::vector<Order>(list.begin(), list.end());
 }
 
 } // namespace bop
