@@ -114,6 +114,8 @@ public:
     pending_orders.push_back(o);
   }
 
+  std::pmr::memory_resource &get_pool() { return pool_resource; }
+
   template <typename T, typename... Args> T *create_strategy(Args &&...args) {
     std::lock_guard<std::mutex> lock(mtx);
     std::pmr::polymorphic_allocator<T> alloc(&pool_resource);
