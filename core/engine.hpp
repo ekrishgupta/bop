@@ -142,6 +142,10 @@ struct ExecutionEngine {
     }
   }
 
+  void add_backend(const MarketBackend &backend) {
+    backends_.push_back(&backend);
+  }
+
   virtual void execute_order(const Order &o);
   virtual void execute_cancel(const std::string &id);
   virtual void execute_batch(const std::vector<Order> &orders);
@@ -719,7 +723,7 @@ PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
   if constexpr (std::is_base_of_v<Trigger, T>) {
     if (co.condition.evaluate(engine)) {
       co.order >> engine;
-      return true;
+      return !co.condition.is_recurring();
     }
   } else {
     if (co.condition.eval()) {
@@ -847,40 +851,38 @@ template <typename T> struct TriggerWrapper : public Trigger {
   bool evaluate(const ExecutionEngine &) override { return condition.eval(); }
 };
 
-// Internal specialization for TimerTrigger
-template <> struct TriggerWrapper<TimerTrigger> : public Trigger {
-  TimerTrigger trigger;
-  TriggerWrapper(TimerTrigger t) : trigger(std::move(t)) {}
-  bool evaluate(const ExecutionEngine &e) override {
-    return trigger.evaluate(e);
-  }
-  bool is_recurring() const override { return trigger.is_recurring(); }
-};
-
 template <typename T, typename F>
 inline void operator>>(ActionBinder<T, F> ab, ExecutionEngine &engine) {
   auto strategy = GlobalAlgoManager.create_strategy<PersistentStrategy>(
       &GlobalAlgoManager.get_pool());
-  strategy->add_step({std::make_shared<TriggerWrapper<T>>(ab.condition),
-                      std::make_shared<CallbackAction>(ab.action)});
+
+  std::shared_ptr<Trigger> t;
+  if constexpr (std::is_convertible_v<T, std::shared_ptr<Trigger>>) {
+    t = ab.condition;
+  } else {
+    t = std::make_shared<TriggerWrapper<T>>(ab.condition);
+  }
+
+  strategy->add_step({t, std::make_shared<CallbackAction>(ab.action)});
 }
 
 template <typename T>
 inline void operator>>(WorkflowChain<T> chain, ExecutionEngine &engine) {
   std::cout << "[WORKFLOW] Registering chained strategy..." << std::endl;
 
+  std::shared_ptr<Trigger> t;
+  if constexpr (std::is_convertible_v<T, std::shared_ptr<Trigger>>) {
+    t = chain.head.condition;
+  } else {
+    t = std::make_shared<TriggerWrapper<T>>(chain.head.condition);
+  }
+
   auto p_strategy =
       GlobalAlgoManager.create_strategy<PersistentStrategy>(WorkflowStep{
-          std::make_shared<TriggerWrapper<T>>(std::move(chain.head.condition)),
-          std::make_shared<OrderAction>(std::move(chain.head.order))});
+          t, std::make_shared<OrderAction>(std::move(chain.head.order))});
 
   for (auto &action : chain.tail) {
-    // Current PersistentStrategy is a simple concurrent-step runner.
-    // For proper 'Chaining', we'd need a SequenceStrategy.
-    // Hack for now: add them concurrently on same trigger
-    p_strategy->add_step(
-        {std::make_shared<TriggerWrapper<T>>(chain.head.condition),
-         std::move(action)});
+    p_strategy->add_step({t, std::move(action)});
   }
 }
 
