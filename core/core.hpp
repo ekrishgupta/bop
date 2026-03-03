@@ -120,6 +120,7 @@ struct SORData {
 };
 
 struct Order {
+  std::string order_id;
   MarketId market;
   Shares quantity;
   bool is_buy;
@@ -145,15 +146,21 @@ struct Order {
   bool is_spread = false;
 
   Order()
-      : market(0u), market2(0u), is_spread(false), quantity(Shares(0)),
-        is_buy(true), outcome_yes(true), price(0), creation_timestamp_ns(0),
-        backend(nullptr) {}
+      : order_id(""), market(0u), market2(0u), is_spread(false),
+        quantity(Shares(0)), is_buy(true), outcome_yes(true), price(0),
+        creation_timestamp_ns(0), backend(nullptr) {
+    static std::atomic<uint64_t> next_id{1};
+    order_id = "order_" + std::to_string(next_id++);
+  }
 
   Order(MarketId m, Shares q, bool b, bool y, Price p, int64_t ts)
-      : market(m), market2(0u), is_spread(false), quantity(q), is_buy(b),
-        outcome_yes(y), price(p), algo_type(AlgoType::None),
+      : order_id(""), market(m), market2(0u), is_spread(false), quantity(q),
+        is_buy(b), outcome_yes(y), price(p), algo_type(AlgoType::None),
         algo_params(std::monostate{}), creation_timestamp_ns(ts),
-        backend(nullptr) {}
+        backend(nullptr) {
+    static std::atomic<uint64_t> next_id{1};
+    order_id = "order_" + std::to_string(next_id++);
+  }
 };
 
 /**
