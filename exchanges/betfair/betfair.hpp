@@ -120,7 +120,7 @@ struct Betfair : public StreamingMarketBackend {
 
 static Betfair betfair;
 
-inline MarketTarget BetfairMarket(const char *name) {
+inline auto BetfairMarket(const char *name) {
   return Market(name, betfair);
 }
 

@@ -58,7 +58,7 @@ struct Gnosis : public StreamingMarketBackend {
 
 static Gnosis gnosis;
 
-inline MarketTarget GnosisMarket(const char *id) {
+inline auto GnosisMarket(const char *id) {
   return Market(id, gnosis);
 }
 

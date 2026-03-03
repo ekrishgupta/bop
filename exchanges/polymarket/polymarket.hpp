@@ -150,7 +150,7 @@ struct Polymarket : public StreamingMarketBackend {
       simdjson::ondemand::document doc =
           parser_.iterate(msg.data(), msg.size(), msg.size());
 
-      auto process_event = [this](auto event) {
+      auto process_event = [this](simdjson::ondemand::object event) {
         std::string_view type;
         if (event["event_type"].get(type))
           return;
@@ -182,20 +182,28 @@ struct Polymarket : public StreamingMarketBackend {
             auto bids = event["bids"];
             for (auto item : bids) {
               std::string_view p_str, s_str;
-              auto arr = item.get_array();
-              auto it = arr.begin();
-              (*it).get(p_str);
-              (++it)->get(s_str);
+              int idx = 0;
+              for (auto val : item.get_array()) {
+                if (idx == 0)
+                  val.get(p_str);
+                else if (idx == 1)
+                  val.get(s_str);
+                idx++;
+              }
               ob.bids[Price::from_double(std::stod(std::string(p_str)))] =
                   static_cast<int64_t>(std::stod(std::string(s_str)));
             }
             auto asks = event["asks"];
             for (auto item : asks) {
               std::string_view p_str, s_str;
-              auto arr = item.get_array();
-              auto it = arr.begin();
-              (*it).get(p_str);
-              (++it)->get(s_str);
+              int idx = 0;
+              for (auto val : item.get_array()) {
+                if (idx == 0)
+                  val.get(p_str);
+                else if (idx == 1)
+                  val.get(s_str);
+                idx++;
+              }
               ob.asks[Price::from_double(std::stod(std::string(p_str)))] =
                   static_cast<int64_t>(std::stod(std::string(s_str)));
             }
@@ -213,7 +221,8 @@ struct Polymarket : public StreamingMarketBackend {
                 std::string_view fill_price_str;
                 if (!event["fill_price"].get(fill_price_str)) {
                   double fill_price = std::stod(std::string(fill_price_str));
-                  notify_fill(std::string(id), static_cast<int>(fill_size),
+                  notify_fill(std::string(id),
+                              Shares(static_cast<int>(fill_size)),
                               Price::from_double(fill_price));
                 }
               }
@@ -228,10 +237,10 @@ struct Polymarket : public StreamingMarketBackend {
 
       if (doc.type() == simdjson::ondemand::json_type::array) {
         for (auto item : doc.get_array()) {
-          process_event(item.get_object());
+          process_event(item.get_object().value());
         }
       } else {
-        process_event(doc.get_object());
+        process_event(doc.get_object().value());
       }
     } catch (...) {
     }
@@ -274,7 +283,7 @@ struct Polymarket : public StreamingMarketBackend {
     json j;
     j["token_id"] = resolve_token_id(o.market, o.outcome_yes);
     j["price"] = o.price.to_usd_string();
-    j["size"] = std::to_string(o.quantity);
+    j["size"] = std::to_string(o.quantity.raw);
     j["side"] = o.is_buy ? "BUY" : "SELL";
     j["order_type"] = (o.price.raw == 0) ? "MARKET" : "LIMIT";
     j["expiration"] = "0";
@@ -284,8 +293,10 @@ struct Polymarket : public StreamingMarketBackend {
     j["owner"] = credentials.address;
     j["nonce"] = 0;
     j["signature"] = auth::PolySigner::sign_order(
-        credentials.secret_key, credentials.address, j["token_id"], j["price"],
-        j["size"], j["side"], j["expiration"], j["nonce"]);
+        credentials.secret_key, credentials.address,
+        j["token_id"].get<std::string>(), j["price"].get<std::string>(),
+        j["size"].get<std::string>(), j["side"].get<std::string>(),
+        j["expiration"].get<std::string>(), j["nonce"].get<uint64_t>());
 
     std::string body = j.dump();
     try {
@@ -361,7 +372,7 @@ struct Polymarket : public StreamingMarketBackend {
 
 static Polymarket polymarket;
 
-inline MarketTarget PolyMarket(const char *id) {
+inline auto PolyMarket(const char *id) {
   return Market(id, polymarket);
 }
 

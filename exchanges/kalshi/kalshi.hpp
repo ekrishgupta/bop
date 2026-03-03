@@ -152,20 +152,28 @@ struct Kalshi : public StreamingMarketBackend {
           OrderBook ob;
           auto bids = m["bids"];
           for (auto item : bids) {
-            int64_t price, qty;
-            auto arr = item.get_array();
-            auto it = arr.begin();
-            (*it).get(price);
-            (++it)->get(qty);
+            int64_t price = 0, qty = 0;
+            int idx = 0;
+            for (auto val : item.get_array()) {
+              if (idx == 0)
+                val.get(price);
+              else if (idx == 1)
+                val.get(qty);
+              idx++;
+            }
             ob.bids[Price::from_cents(price)] = qty;
           }
           auto asks = m["asks"];
           for (auto item : asks) {
-            int64_t price, qty;
-            auto arr = item.get_array();
-            auto it = arr.begin();
-            (*it).get(price);
-            (++it)->get(qty);
+            int64_t price = 0, qty = 0;
+            int idx = 0;
+            for (auto val : item.get_array()) {
+              if (idx == 0)
+                val.get(price);
+              else if (idx == 1)
+                val.get(qty);
+              idx++;
+            }
             ob.asks[Price::from_cents(price)] = qty;
           }
           update_orderbook(MarketId(ticker), ob);
@@ -194,7 +202,7 @@ struct Kalshi : public StreamingMarketBackend {
         int64_t price_cents;
         if (!m["order_id"].get(order_id) && !m["count"].get(qty) &&
             !m["price"].get(price_cents)) {
-          notify_fill(std::string(order_id), static_cast<int>(qty),
+          notify_fill(std::string(order_id), Shares(qty),
                       Price::from_cents(price_cents));
         }
       } else if (type == "order_status_change") {
@@ -223,7 +231,7 @@ struct Kalshi : public StreamingMarketBackend {
 
     json j;
     j["action"] = o.is_buy ? "buy" : "sell";
-    j["amount"] = o.quantity;
+    j["amount"] = o.quantity.raw;
     j["market_ticker"] = resolve_ticker(o.market.ticker);
     j["side"] = o.outcome_yes ? "yes" : "no";
     j["type"] = (o.price.raw == 0) ? "market" : "limit";
@@ -316,7 +324,7 @@ struct Kalshi : public StreamingMarketBackend {
 
 static Kalshi kalshi;
 
-inline MarketTarget KalshiTicker(const char *ticker) {
+inline auto KalshiTicker(const char *ticker) {
   return Market(ticker, kalshi);
 }
 

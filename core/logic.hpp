@@ -563,6 +563,19 @@ inline ConditionalOrder<T> operator>>(WhenBinder<T> w,
   return {std::move(w.condition), o};
 }
 
+template <typename T, typename B>
+inline ConditionalOrder<T> operator>>(WhenBinder<T> w,
+                                      const MarketBoundQuote<B> &q) {
+  Order o;
+  o.market = q.market;
+  o.quantity = q.quantity;
+  o.backend = q.backend;
+  o.algo_type = AlgoType::MarketMaker;
+  o.algo_params = MarketMakerData{q.spread, q.ref};
+  o.creation_timestamp_ns = q.timestamp_ns;
+  return {std::move(w.condition), std::move(o)};
+}
+
 template <typename B>
 inline MarketBoundOrder<B> operator/(const Buy &b, MarketTarget<B> target) {
   auto r = target.resolve();
@@ -601,6 +614,40 @@ inline Condition<PriceTag> operator>(MarketQuery<PriceTag> q, double price) {
 }
 inline Condition<PriceTag> operator<(MarketQuery<PriceTag> q, double price) {
   return {q, Price::from_double(price).raw, false};
+}
+
+inline Condition<FairPriceTag> operator>(MarketQuery<FairPriceTag> q,
+                                         Price threshold) {
+  return {q, threshold.raw, true};
+}
+inline Condition<FairPriceTag> operator<(MarketQuery<FairPriceTag> q,
+                                         Price threshold) {
+  return {q, threshold.raw, false};
+}
+inline Condition<FairPriceTag> operator>(MarketQuery<FairPriceTag> q,
+                                         double threshold) {
+  return {q, Price::from_double(threshold).raw, true};
+}
+inline Condition<FairPriceTag> operator<(MarketQuery<FairPriceTag> q,
+                                         double threshold) {
+  return {q, Price::from_double(threshold).raw, false};
+}
+
+inline Condition<MidpointTag> operator>(MarketQuery<MidpointTag> q,
+                                        Price threshold) {
+  return {q, threshold.raw, true};
+}
+inline Condition<MidpointTag> operator<(MarketQuery<MidpointTag> q,
+                                        Price threshold) {
+  return {q, threshold.raw, false};
+}
+inline Condition<MidpointTag> operator>(MarketQuery<MidpointTag> q,
+                                        double threshold) {
+  return {q, Price::from_double(threshold).raw, true};
+}
+inline Condition<MidpointTag> operator<(MarketQuery<MidpointTag> q,
+                                        double threshold) {
+  return {q, Price::from_double(threshold).raw, false};
 }
 
 // Volume Comparisons
@@ -804,6 +851,18 @@ inline Condition<PortfolioTag, PortfolioQuery> operator<(PortfolioMetricProxy p,
           false};
 }
 
+template <typename T, typename F> struct ActionBinder {
+  T condition;
+  F action;
+};
+
+template <
+    typename T, typename F,
+    typename = std::enable_if_t<std::is_invocable_v<F, ExecutionEngine &>>>
+inline ActionBinder<T, F> operator>>(WhenBinder<T> w, F callback) {
+  return {std::move(w.condition), std::move(callback)};
+}
+
 // --- Temporal Helpers ---
 inline WhenBinder<TimerTrigger> Every(std::chrono::milliseconds d) {
   return {TimerTrigger(d, true)};
@@ -822,6 +881,10 @@ inline WhenBinder<TimerTrigger> Every(std::chrono::duration<Rep, Period> d) {
 template <typename Rep, typename Period>
 inline WhenBinder<TimerTrigger> After(std::chrono::duration<Rep, Period> d) {
   return After(std::chrono::duration_cast<std::chrono::milliseconds>(d));
+}
+
+inline WhenBinder<OnFillTrigger> OnFill(const Order &o) {
+  return {OnFillTrigger("test_id")};
 }
 
 // --- Workflow Chaining ---

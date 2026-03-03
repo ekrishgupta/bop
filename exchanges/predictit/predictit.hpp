@@ -112,7 +112,7 @@ struct PredictIt : public StreamingMarketBackend {
 
 static PredictIt predictit;
 
-inline MarketTarget PredictItMarket(const char *ticker) {
+inline auto PredictItMarket(const char *ticker) {
   return Market(ticker, predictit);
 }
 
