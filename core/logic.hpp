@@ -864,27 +864,39 @@ inline ActionBinder<T, F> operator>>(WhenBinder<T> w, F callback) {
 }
 
 // --- Temporal Helpers ---
-inline WhenBinder<TimerTrigger> Every(std::chrono::milliseconds d) {
-  return {TimerTrigger(d, true)};
+inline WhenBinder<std::shared_ptr<TimerTrigger>>
+Every(std::chrono::milliseconds d) {
+  return {std::make_shared<TimerTrigger>(d, true)};
 }
 
-inline WhenBinder<TimerTrigger> After(std::chrono::milliseconds d) {
-  return {TimerTrigger(d, false)};
+inline WhenBinder<std::shared_ptr<TimerTrigger>>
+After(std::chrono::milliseconds d) {
+  return {std::make_shared<TimerTrigger>(d, false)};
 }
 
 // Support for standard chrono literals
 template <typename Rep, typename Period>
-inline WhenBinder<TimerTrigger> Every(std::chrono::duration<Rep, Period> d) {
+inline WhenBinder<std::shared_ptr<TimerTrigger>>
+Every(std::chrono::duration<Rep, Period> d) {
   return Every(std::chrono::duration_cast<std::chrono::milliseconds>(d));
 }
 
 template <typename Rep, typename Period>
-inline WhenBinder<TimerTrigger> After(std::chrono::duration<Rep, Period> d) {
+inline WhenBinder<std::shared_ptr<TimerTrigger>>
+After(std::chrono::duration<Rep, Period> d) {
   return After(std::chrono::duration_cast<std::chrono::milliseconds>(d));
 }
 
-inline WhenBinder<OnFillTrigger> OnFill(const Order &o) {
-  return {OnFillTrigger("test_id")};
+inline WhenBinder<std::shared_ptr<OnFillTrigger>> OnFill(const Order &o) {
+  return {std::make_shared<OnFillTrigger>(o.order_id)};
+}
+
+inline std::shared_ptr<CancelAction> Cancel(const Order &o) {
+  return std::make_shared<CancelAction>(o.order_id);
+}
+
+inline std::shared_ptr<CancelAction> Cancel(const std::string &id) {
+  return std::make_shared<CancelAction>(id);
 }
 
 // --- Workflow Chaining ---
