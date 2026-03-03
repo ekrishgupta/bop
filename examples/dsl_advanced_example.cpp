@@ -29,20 +29,20 @@ int main() {
 
   // 1. Temporal Trigger: Refresh quoting every 1 second
   std::cout << "[DEMO] Setting up Every(1s) Quote..." << std::endl;
-  Every(1s) >> Quote(Shares(10)) / Market("BTC") / YES >> engine;
+  Every(1s) >> Quote(Shares(10)) / Market("BTC") >> engine;
 
   // 2. Chained Execution: Buy now, then Sell after fill
   // Note: In this mock, filling doesn't happen automatically unless we trigger
   // it.
   std::cout << "[DEMO] Setting up Chained execution (Buy -> Then Sell)..."
             << std::endl;
-  (When(Market("ETH").Midpoint() < 60_c) >>
+  (When(Market("ETH").Midpoint() < 0.60_usd) >>
    Buy(Shares(10)) / Market("ETH") / YES) >>
       (Sell(Shares(10)) / Market("ETH") / YES) >> engine;
 
   // 3. Fair Price Logic: Capture discrepancy
   std::cout << "[DEMO] Checking FairPrice logic..." << std::endl;
-  auto arb_cond = When(Market("BTC").FairPrice() > 55_c);
+  auto arb_cond = When(Market("BTC").FairPrice() > 0.55_usd);
   mock.p = 0.60_usd; // Set price to meet condition
 
   if (arb_cond.condition.eval()) {
