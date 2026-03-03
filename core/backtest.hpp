@@ -156,7 +156,7 @@ struct BacktestMarketBackend : public MarketBackend {
 
         // Apply square-root law price impact
         if (slippage_model_.use_sqrt_law && slippage_model_.daily_volume > 0) {
-          double q = static_cast<double>(order.quantity);
+          double q = static_cast<double>(order.quantity.raw);
           double v = slippage_model_.daily_volume;
 
           // Use dynamic rolling volatility from the engine if available,
@@ -179,14 +179,14 @@ struct BacktestMarketBackend : public MarketBackend {
         // or in addition
         if (!slippage_model_.use_sqrt_law &&
             slippage_model_.impact_constant > 0) {
-          double impact = slippage_model_.impact_constant * order.quantity;
+          double impact = slippage_model_.impact_constant * order.quantity.raw;
           if (order.is_buy)
             fill_price.raw += static_cast<int64_t>(impact * 100);
           else
             fill_price.raw -= static_cast<int64_t>(impact * 100);
         }
 
-        int qty = order.quantity;
+        int64_t qty = order.quantity.raw;
         if (order.is_buy) {
           positions_[order.market.hash] += qty;
           cached_balance_ =
@@ -197,7 +197,7 @@ struct BacktestMarketBackend : public MarketBackend {
               cached_balance_ + Price(fill_price.raw * qty / Price::SCALE);
         }
 
-        engine->add_order_fill(id, qty, fill_price);
+        engine->add_order_fill(id, Shares(qty), fill_price);
         it = pending_orders_.erase(it);
       } else {
         ++it;
