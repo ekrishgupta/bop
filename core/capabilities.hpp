@@ -13,9 +13,9 @@ struct SupportsIOC {};
 
 // Traits base
 template <typename T> struct BackendTraits {
-  static constexpr bool supports_post_only = false;
-  static constexpr bool supports_iceberg = false;
-  static constexpr bool supports_stp = false;
+  static constexpr bool supports_post_only = true;
+  static constexpr bool supports_iceberg = true;
+  static constexpr bool supports_stp = true;
   static constexpr bool supports_fok = true; // Default
   static constexpr bool supports_ioc = true; // Default
 };
