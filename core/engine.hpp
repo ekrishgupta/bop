@@ -716,9 +716,16 @@ public:
 template <typename T>
 inline bool
 PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
-  if (co.condition.eval()) {
-    co.order >> engine;
-    return true;
+  if constexpr (std::is_base_of_v<Trigger, T>) {
+    if (co.condition.evaluate(engine)) {
+      co.order >> engine;
+      return true;
+    }
+  } else {
+    if (co.condition.eval()) {
+      co.order >> engine;
+      return true;
+    }
   }
   return false;
 }
@@ -849,6 +856,14 @@ template <> struct TriggerWrapper<TimerTrigger> : public Trigger {
   }
   bool is_recurring() const override { return trigger.is_recurring(); }
 };
+
+template <typename T, typename F>
+inline void operator>>(ActionBinder<T, F> ab, ExecutionEngine &engine) {
+  auto strategy = GlobalAlgoManager.create_strategy<PersistentStrategy>(
+      &GlobalAlgoManager.get_pool());
+  strategy->add_step({std::make_shared<TriggerWrapper<T>>(ab.condition),
+                      std::make_shared<CallbackAction>(ab.action)});
+}
 
 template <typename T>
 inline void operator>>(WorkflowChain<T> chain, ExecutionEngine &engine) {
