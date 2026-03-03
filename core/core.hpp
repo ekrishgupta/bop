@@ -177,6 +177,12 @@ struct Buy {
     timestamp_ns =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
   }
+  explicit Buy(int q) : quantity(Shares(q)) {
+    if (q <= 0)
+      throw std::invalid_argument("Buy quantity must be positive");
+    timestamp_ns =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  }
 };
 
 struct Sell {
@@ -184,6 +190,12 @@ struct Sell {
   int64_t timestamp_ns;
   explicit Sell(Shares q) : quantity(q) {
     if (q.raw <= 0)
+      throw std::invalid_argument("Sell quantity must be positive");
+    timestamp_ns =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  }
+  explicit Sell(int q) : quantity(Shares(q)) {
+    if (q <= 0)
       throw std::invalid_argument("Sell quantity must be positive");
     timestamp_ns =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
