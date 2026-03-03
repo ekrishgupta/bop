@@ -8,9 +8,8 @@
 #include <iostream>
 #include <thread>
 
-LiveExecutionEngine RealLiveExchange;
-ExecutionEngine &LiveExchange = RealLiveExchange;
-
+extern bop::LiveExecutionEngine global_live_engine;
+bop::LiveExecutionEngine &RealLiveExchange = global_live_engine;
 const char *tif_to_string(TimeInForce tif) {
   switch (tif) {
   case TimeInForce::GTC:
