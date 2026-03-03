@@ -21,8 +21,12 @@ void ExecutionEngine::run() {
 }
 
 void ExecutionEngine::execute_order(const Order &o) {
-  if (o.backend) {
-    std::string id = o.backend->create_order(o);
+  const MarketBackend *b = o.backend;
+  if (!b && !backends_.empty())
+    b = backends_[0];
+
+  if (b) {
+    std::string id = b->create_order(o);
     if (!id.empty() && id != "error")
       track_order(id, o);
   }
@@ -91,6 +95,7 @@ void ExecutionEngine::add_order_fill(const std::string &id, Shares qty,
   current_daily_pnl_raw -= simulated_loss;
   std::cout << "[ENGINE] Fill recorded for " << id << ": " << qty << " @ "
             << price << std::endl;
+  GlobalAlgoManager.broadcast_execution_event(*this, id, OrderStatus::Filled);
   check_kill_switch();
 }
 
