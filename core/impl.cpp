@@ -351,7 +351,7 @@ void operator>>(const Order &o, ExecutionEngine &engine) {
   engine.execute_order(order_to_dispatch);
 }
 
-void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine) {
+void operator>>(const std::vector<Order> &batch, ExecutionEngine &engine) {
   if (batch.size() == 0)
     return;
   std::vector<Order> orders(batch);
@@ -361,19 +361,6 @@ void operator>>(std::initializer_list<Order> batch, ExecutionEngine &engine) {
 void operator>>(const OCOOrder &oco, ExecutionEngine &engine) {
   oco.order1 >> engine;
   oco.order2 >> engine;
-}
-
-Order operator>>(MarketBoundQuote q, ExecutionEngine &engine) {
-  Order o;
-  o.market = q.market;
-  o.quantity = q.quantity;
-  o.backend = q.backend;
-  o.algo_type = AlgoType::MarketMaker;
-  o.algo_params = MarketMakerData{q.spread, q.ref};
-  o.creation_timestamp_ns = q.timestamp_ns;
-
-  o >> engine;
-  return o;
 }
 
 } // namespace bop
