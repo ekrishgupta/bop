@@ -6,6 +6,7 @@
 #include "exchanges/polymarket/polymarket.hpp"
 #include "exchanges/predictit/predictit.hpp"
 #include <iostream>
+#include <variant>
 #include <thread>
 
 extern bop::LiveExecutionEngine global_live_engine;
@@ -55,7 +56,7 @@ void my_strategy() {
             << "Action: " << (trade_limit.is_buy ? "Buy " : "Sell ") << "\n"
             << "Quantity: " << trade_limit.quantity << "\n"
             << "Market Hash: " << trade_limit.market.hash << "\n"
-            << "Outcome: " << (trade_limit.outcome_yes ? "YES" : "NO") << "\n"
+            << "Outcome: " << (std::holds_alternative<bool>(trade_limit.outcome) ? (std::get<bool>(trade_limit.outcome) ? "YES" : "NO") : "OTHER") << "\n"
             << "Price: " << trade_limit.price.raw << " ticks\n"
             << "TIF: " << tif_to_string(trade_limit.tif) << "\n"
             << "PostOnly: " << (trade_limit.post_only ? "true" : "false")
@@ -66,7 +67,7 @@ void my_strategy() {
             << "Action: " << (trade_market.is_buy ? "Buy " : "Sell ") << "\n"
             << "Quantity: " << trade_market.quantity << "\n"
             << "Market Hash: " << trade_market.market.hash << "\n"
-            << "Outcome: " << (trade_market.outcome_yes ? "YES" : "NO") << "\n"
+            << "Outcome: " << (std::holds_alternative<bool>(trade_market.outcome) ? (std::get<bool>(trade_market.outcome) ? "YES" : "NO") : "OTHER") << "\n"
             << "Price: " << trade_market.price.raw << " (Market)\n"
             << "TIF: " << tif_to_string(trade_market.tif) << "\n"
             << "PostOnly: " << (trade_market.post_only ? "true" : "false")
@@ -97,7 +98,7 @@ void my_strategy() {
             << "Action: " << (trade_pegged.is_buy ? "Buy " : "Sell ") << "\n"
             << "Quantity: " << trade_pegged.quantity << "\n"
             << "Market Hash: " << trade_pegged.market.hash << "\n"
-            << "Outcome: " << (trade_pegged.outcome_yes ? "YES" : "NO") << "\n"
+            << "Outcome: " << (std::holds_alternative<bool>(trade_pegged.outcome) ? (std::get<bool>(trade_pegged.outcome) ? "YES" : "NO") : "OTHER") << "\n"
             << "Pegged Reference: "
             << (trade_pegged.algo_type == AlgoType::Peg
                     ? (std::get<PegData>(trade_pegged.algo_params).ref ==
@@ -162,7 +163,7 @@ void my_strategy() {
   std::cout << "\nOrder 6 (Bracket) generated explicitly on stack.\n"
             << "Action: " << (trade_bracket.is_buy ? "Buy " : "Sell ")
             << trade_bracket.quantity << "\n"
-            << "Market Hash: " << trade_bracket.market.hash << "\n"
+            << "Outcome: " << (std::holds_alternative<bool>(trade_bracket.outcome) ? (std::get<bool>(trade_bracket.outcome) ? "YES" : "NO") : "OTHER") << "\n"
             << "Limit Price: " << trade_bracket.price.raw << " ticks\n"
             << "Take Profit: " << trade_bracket.tp_price.raw << " ticks\n"
             << "Stop Loss: " << trade_bracket.sl_price.raw << " ticks"
@@ -275,8 +276,8 @@ void arbitrage_strategy() {
   arb_logic >> LiveExchange;
 
   std::cout << "Arb Check: Kalshi BTC ("
-            << kalshi.get_price("BTC"_mkt, true).raw << ") vs Polymarket BTC ("
-            << polymarket.get_price("BTC"_mkt, true).raw << ")" << std::endl;
+            << kalshi.get_price("BTC"_mkt, Outcome(true)).raw << ") vs Polymarket BTC ("
+            << polymarket.get_price("BTC"_mkt, Outcome(true)).raw << ")" << std::endl;
 }
 
 void auth_demo() {
