@@ -1,5 +1,6 @@
 #include "bop.hpp"
 #include <cassert>
+#include <variant>
 #include <iostream>
 #include <string>
 
@@ -16,14 +17,14 @@ void test_basic_order_construction() {
 
   TEST_ASSERT(o.quantity.raw == 100, "Quantity should be 100");
   TEST_ASSERT(o.is_buy == true, "Side should be Buy");
-  TEST_ASSERT(o.outcome_yes == true, "Outcome should be YES");
+  TEST_ASSERT(std::get<bool>(o.outcome) == true, "Outcome should be YES");
   TEST_ASSERT(o.market.ticker == "AAPL", "Ticker should be AAPL");
   TEST_ASSERT(o.market.hash == bop::fnv1a("AAPL"), "Market hash mismatch");
 
   auto s = Sell(50_shares) / "TSLA"_mkt / NO;
   TEST_ASSERT(s.quantity.raw == 50, "Quantity should be 50");
   TEST_ASSERT(s.is_buy == false, "Side should be Sell");
-  TEST_ASSERT(s.outcome_yes == false, "Outcome should be NO");
+  TEST_ASSERT(std::get<bool>(s.outcome) == false, "Outcome should be NO");
   TEST_ASSERT(s.market.ticker == "TSLA", "Ticker should be TSLA");
 }
 
