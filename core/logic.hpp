@@ -151,7 +151,7 @@ struct PortfolioQuery {
 
 template <typename Tag> struct MarketQuery {
   MarketId market;
-  bool outcome_yes;
+  OutcomeId outcome;
   const MarketBackend *backend = nullptr;
   bool is_universal = false;
 
@@ -187,22 +187,23 @@ template <typename B = MarketBackend> struct MarketTarget {
     return r;
   }
 
-  inline MarketQuery<PriceTag> Price(YES_t) const {
+  inline MarketQuery<PriceTag> Price(OutcomeId out) const {
     auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
+    return {r.market, out, r.backend, r.is_universal};
   }
-  inline MarketQuery<PriceTag> Price(NO_t) const {
+  inline MarketQuery<PriceTag> Price(YES_t) const { return Price(OutcomeId(true)); }
+  inline MarketQuery<PriceTag> Price(NO_t) const { return Price(OutcomeId(false)); }
+  inline MarketQuery<PriceTag> Price(Long_t) const { return Price(OutcomeId(std::monostate{})); }
+  inline MarketQuery<PriceTag> Price(Outcome out) const { return Price(out.id); }
+
+  inline MarketQuery<VolumeTag> Volume(OutcomeId out) const {
     auto r = resolve();
-    return {r.market, false, r.backend, r.is_universal};
+    return {r.market, out, r.backend, r.is_universal};
   }
-  inline MarketQuery<VolumeTag> Volume(YES_t) const {
-    auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
-  }
-  inline MarketQuery<VolumeTag> Volume(NO_t) const {
-    auto r = resolve();
-    return {r.market, false, r.backend, r.is_universal};
-  }
+  inline MarketQuery<VolumeTag> Volume(YES_t) const { return Volume(OutcomeId(true)); }
+  inline MarketQuery<VolumeTag> Volume(NO_t) const { return Volume(OutcomeId(false)); }
+  inline MarketQuery<VolumeTag> Volume(Long_t) const { return Volume(OutcomeId(std::monostate{})); }
+  inline MarketQuery<VolumeTag> Volume(Outcome out) const { return Volume(out.id); }
 
   // Market Depth Queries
   inline MarketQuery<DepthTag> Spread() const {
@@ -220,12 +221,12 @@ template <typename B = MarketBackend> struct MarketTarget {
 
   inline MarketQuery<MidpointTag> Midpoint() const {
     auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
+    return {r.market, std::monostate{}, r.backend, r.is_universal};
   }
 
   inline MarketQuery<FairPriceTag> FairPrice() const {
     auto r = resolve();
-    return {r.market, true, r.backend, r.is_universal};
+    return {r.market, std::monostate{}, r.backend, r.is_universal};
   }
   // Event Hooks
   inline MarketId OnTrade() const { return resolve().market; }
