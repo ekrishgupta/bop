@@ -23,7 +23,7 @@ struct Gnosis : public StreamingMarketBackend {
   }
 
   // --- Market Data ---
-  Price get_price_http(MarketId market, bool outcome_yes) const override {
+  Price get_price_http(MarketId market, OutcomeId outcome) const override {
     // Query AMM (like Omen or Azuro) for price
     return Price::from_cents(55);
   }
@@ -33,7 +33,7 @@ struct Gnosis : public StreamingMarketBackend {
     return {{{Price::from_cents(54), 1000}}, {{Price::from_cents(56), 1000}}};
   }
 
-  Price get_depth(MarketId, bool) const override {
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
     return Price::from_cents(2);
   }
 
