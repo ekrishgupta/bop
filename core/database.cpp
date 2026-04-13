@@ -1,5 +1,6 @@
 #include "database.hpp"
 #include <chrono>
+#include <variant>
 #include <sstream>
 
 namespace bop {
@@ -70,7 +71,7 @@ void Database::log_order(const std::string &id, const Order &o) {
 
   sqlite3_stmt *stmt;
   const char *sql = "INSERT OR REPLACE INTO orders (id, ticker, is_buy, "
-                    "quantity, price, outcome_yes, timestamp_ns) "
+                    "quantity, price, outcome_id, timestamp_ns) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?);";
 
   if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
@@ -79,7 +80,13 @@ void Database::log_order(const std::string &id, const Order &o) {
     sqlite3_bind_int(stmt, 3, o.is_buy ? 1 : 0);
     sqlite3_bind_int64(stmt, 4, o.quantity.raw);
     sqlite3_bind_int64(stmt, 5, o.price.raw);
-    sqlite3_bind_int(stmt, 6, o.outcome_yes ? 1 : 0);
+    int outcome_val = 1;
+    if (std::holds_alternative<bool>(o.outcome)) {
+      outcome_val = std::get<bool>(o.outcome) ? 1 : 0;
+    } else if (std::holds_alternative<uint32_t>(o.outcome)) {
+      outcome_val = static_cast<int>(std::get<uint32_t>(o.outcome));
+    }
+    sqlite3_bind_int(stmt, 6, outcome_val);
     sqlite3_bind_int64(stmt, 7, o.creation_timestamp_ns);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
