@@ -51,7 +51,11 @@ struct Kalshi : public StreamingMarketBackend {
   std::string get_exchange_schedule() const override { return "24/7"; }
 
   // --- Market Data ---
-  Price get_price_http(MarketId market, bool outcome_yes) const override {
+  Price get_price_http(MarketId market, OutcomeId outcome) const override {
+    bool outcome_yes = true;
+    if (std::holds_alternative<bool>(outcome)) {
+      outcome_yes = std::get<bool>(outcome);
+    }
     std::string resolved = resolve_ticker(market.ticker);
     std::string url =
         std::string("https://api.elections.kalshi.com/trade-api/v2/markets/") +
@@ -102,7 +106,7 @@ struct Kalshi : public StreamingMarketBackend {
     return {};
   }
 
-  Price get_depth(MarketId, bool) const override {
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
     return Price::from_cents(2);
   }
 
@@ -233,11 +237,15 @@ struct Kalshi : public StreamingMarketBackend {
     j["action"] = o.is_buy ? "buy" : "sell";
     j["amount"] = o.quantity.raw;
     j["market_ticker"] = resolve_ticker(o.market.ticker);
-    j["side"] = o.outcome_yes ? "yes" : "no";
+    bool outcome_yes = true;
+    if (std::holds_alternative<bool>(o.outcome)) {
+      outcome_yes = std::get<bool>(o.outcome);
+    }
+    j["side"] = outcome_yes ? "yes" : "no";
     j["type"] = (o.price.raw == 0) ? "market" : "limit";
 
     if (o.price.raw != 0) {
-      if (o.outcome_yes)
+      if (outcome_yes)
         j["yes_price"] = o.price.to_cents();
       else
         j["no_price"] = o.price.to_cents();
