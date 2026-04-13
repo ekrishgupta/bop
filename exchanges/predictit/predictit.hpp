@@ -51,7 +51,11 @@ struct PredictIt : public StreamingMarketBackend {
   std::string get_exchange_schedule() const override { return "24/7"; }
 
   // --- Market Data ---
-  Price get_price_http(MarketId market, bool outcome_yes) const override {
+  Price get_price_http(MarketId market, OutcomeId outcome) const override {
+    bool outcome_yes = true;
+    if (std::holds_alternative<bool>(outcome)) {
+      outcome_yes = std::get<bool>(outcome);
+    }
     std::string resolved = resolve_ticker(market.ticker);
     // If it's a market ID, we might need to drill down to contracts.
     // PredictIt API for a single market: /api/marketdata/markets/[marketId]
@@ -78,7 +82,7 @@ struct PredictIt : public StreamingMarketBackend {
     return {{{Price::from_cents(49), 100}}, {{Price::from_cents(51), 100}}};
   }
 
-  Price get_depth(MarketId, bool) const override {
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
     return Price::from_cents(1);
   }
 
