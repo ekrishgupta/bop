@@ -33,9 +33,9 @@ bool TWAPAlgo::tick_impl(ExecutionEngine &engine) {
   // Adaptive logic: adjust slice size based on volatility (price moves) and
   // spread
   Price current_price =
-      engine.get_price(parent_order.market, parent_order.outcome_yes);
-  Price bid = engine.get_depth(parent_order.market, true);
-  Price ask = engine.get_depth(parent_order.market, false);
+      engine.get_price(parent_order.market, parent_order.outcome);
+  Price bid = engine.get_depth(parent_order.market, OutcomeId(true)); // Using true as legacy for BestBid
+  Price ask = engine.get_depth(parent_order.market, OutcomeId(false)); // Using false as legacy for BestAsk
 
   if (current_price.raw != 0) {
     if (last_price.raw != 0) {
@@ -110,7 +110,7 @@ TrailingStopAlgo::TrailingStopAlgo(const Order &o) {
 
 bool TrailingStopAlgo::tick_impl(ExecutionEngine &engine) {
   Price current_price =
-      engine.get_price(parent_order.market, parent_order.outcome_yes);
+      engine.get_price(parent_order.market, parent_order.outcome);
   if (current_price.raw == 0)
     return false;
 
@@ -180,14 +180,14 @@ bool PegAlgo::tick_impl(ExecutionEngine &engine) {
 
   Price bbo_price;
   if (ref == ReferencePrice::Mid) {
-    Price bid = engine.get_depth(parent_order.market, true);
-    Price ask = engine.get_depth(parent_order.market, false);
+    Price bid = engine.get_depth(parent_order.market, OutcomeId(true));
+    Price ask = engine.get_depth(parent_order.market, OutcomeId(false));
     if (bid.raw == 0 || ask.raw == 0)
       return false;
     bbo_price = Price((bid.raw + ask.raw) / 2);
   } else {
-    bool is_bid = (ref == ReferencePrice::Bid);
-    bbo_price = engine.get_depth(parent_order.market, is_bid);
+    OutcomeId out_id = (ref == ReferencePrice::Bid) ? OutcomeId(true) : OutcomeId(false);
+    bbo_price = engine.get_depth(parent_order.market, out_id);
   }
 
   if (bbo_price.raw == 0)
@@ -287,8 +287,8 @@ bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     return true;
 
   // We check prices on both backends
-  Price p1_yes = b1->get_price(m1, true);
-  Price p2_yes = b2->get_price(m2, true);
+  Price p1_yes = b1->get_price(m1, OutcomeId(true));
+  Price p2_yes = b2->get_price(m2, OutcomeId(true));
 
   if (p1_yes.raw == 0 || p2_yes.raw == 0)
     return false;
@@ -299,10 +299,10 @@ bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b1->name() << " @ " << p1_yes
               << ", Sell " << b2->name() << " @ " << p2_yes << std::endl;
 
-    Order buy_o(m1, Shares(quantity), true, true, p1_yes, 0);
+    Order buy_o(m1, quantity, true, true, p1_yes, 0);
     buy_o.backend = b1;
 
-    Order sell_o(m2, Shares(quantity), false, true, p2_yes, 0);
+    Order sell_o(m2, quantity, false, true, p2_yes, 0);
     sell_o.backend = b2;
 
     buy_o >> engine;
@@ -317,10 +317,10 @@ bool ArbitrageAlgo::tick_impl(ExecutionEngine &engine) {
     std::cout << "[ALGO] ARB OPPORTUNITY: Buy " << b2->name() << " @ " << p2_yes
               << ", Sell " << b1->name() << " @ " << p1_yes << std::endl;
 
-    Order buy_o(m2, Shares(quantity), true, true, p2_yes, 0);
+    Order buy_o(m2, quantity, true, true, p2_yes, 0);
     buy_o.backend = b2;
 
-    Order sell_o(m1, Shares(quantity), false, true, p1_yes, 0);
+    Order sell_o(m1, quantity, false, true, p1_yes, 0);
     sell_o.backend = b1;
 
     buy_o >> engine;
@@ -344,14 +344,14 @@ MarketMakerAlgo::MarketMakerAlgo(const Order &o) {
 bool MarketMakerAlgo::tick_impl(ExecutionEngine &engine) {
   Price ref_price;
   if (ref == ReferencePrice::Mid) {
-    Price bid = engine.get_depth(parent_order.market, true);
-    Price ask = engine.get_depth(parent_order.market, false);
+    Price bid = engine.get_depth(parent_order.market, OutcomeId(true));
+    Price ask = engine.get_depth(parent_order.market, OutcomeId(false));
     if (bid.raw == 0 || ask.raw == 0)
       return false;
     ref_price = Price((bid.raw + ask.raw) / 2);
   } else {
-    bool is_bid = (ref == ReferencePrice::Bid);
-    ref_price = engine.get_depth(parent_order.market, is_bid);
+    OutcomeId out_id = (ref == ReferencePrice::Bid) ? OutcomeId(true) : OutcomeId(false);
+    ref_price = engine.get_depth(parent_order.market, out_id);
   }
 
   if (ref_price.raw == 0)
@@ -427,8 +427,8 @@ bool SORAlgo::tick_impl(ExecutionEngine &engine) {
     return true;
 
   // Get current prices from both backends
-  Price p1 = b1->get_price(parent_order.market, parent_order.outcome_yes);
-  Price p2 = b2->get_price(parent_order.market, parent_order.outcome_yes);
+  Price p1 = b1->get_price(parent_order.market, parent_order.outcome);
+  Price p2 = b2->get_price(parent_order.market, parent_order.outcome);
 
   if (p1.raw == 0 || p2.raw == 0)
     return false;

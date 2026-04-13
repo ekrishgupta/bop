@@ -69,7 +69,7 @@ void ExecutionEngine::execute_close_positions() {
       close_order.market = MarketId(market_hash);
       close_order.quantity = Shares(std::abs(qty));
       close_order.is_buy = (qty < 0);
-      close_order.outcome_yes = true; // Simplified
+      close_order.outcome = OutcomeId(true); // Simplified
       close_order.backend = b;
       execute_order(close_order);
     }
@@ -217,7 +217,7 @@ void LiveExecutionEngine::sync_state() {
             new_positions[fnv1a(ticker.c_str())] += size;
 
             // Calculate exposure
-            Price mid = b->get_price(MarketId(ticker), true);
+            Price mid = b->get_price(MarketId(ticker), OutcomeId(true));
             if (mid.raw > 0) {
               total_exposure.raw += std::abs(size) * mid.raw;
             }
