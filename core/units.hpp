@@ -67,6 +67,7 @@ struct USDTag {};
 struct TicksTag {};
 
 using Shares = Quantity<SharesTag, int64_t>;
+using Units = Shares;
 using Ticks = Quantity<TicksTag, int64_t>;
 
 } // namespace bop

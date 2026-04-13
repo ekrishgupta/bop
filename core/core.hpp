@@ -63,6 +63,21 @@ static constexpr YES_t YES;
 struct NO_t {};
 static constexpr NO_t NO;
 
+struct Long_t {};
+static constexpr Long_t Long;
+struct Short_t {};
+static constexpr Short_t Short;
+
+using OutcomeId = std::variant<std::monostate, bool, uint32_t, std::string>;
+struct Outcome {
+  OutcomeId id;
+  explicit Outcome(uint32_t i) : id(i) {}
+  explicit Outcome(const char *s) : id(std::string(s)) {}
+  explicit Outcome(bool b) : id(b) {}
+  explicit Outcome(OutcomeId v) : id(v) {}
+  operator OutcomeId() const { return id; }
+};
+
 // Order Status
 enum class OrderStatus {
   Pending,
@@ -124,7 +139,7 @@ struct Order {
   MarketId market;
   Shares quantity;
   bool is_buy;
-  bool outcome_yes;
+  OutcomeId outcome;
   Price price = Price(0);
   TimeInForce tif = TimeInForce::GTC;
   bool post_only = false;
@@ -147,15 +162,15 @@ struct Order {
 
   Order()
       : order_id(""), market(0u), market2(0u), is_spread(false),
-        quantity(Shares(0)), is_buy(true), outcome_yes(true), price(0),
+        quantity(Shares(0)), is_buy(true), outcome(true), price(0),
         creation_timestamp_ns(0), backend(nullptr) {
     static std::atomic<uint64_t> next_id{1};
     order_id = "order_" + std::to_string(next_id++);
   }
 
-  Order(MarketId m, Shares q, bool b, bool y, Price p, int64_t ts)
+  Order(MarketId m, Shares q, bool b, OutcomeId out = true, Price p = Price(0), int64_t ts = 0)
       : order_id(""), market(m), market2(0u), is_spread(false), quantity(q),
-        is_buy(b), outcome_yes(y), price(p), algo_type(AlgoType::None),
+        is_buy(b), outcome(out), price(p), algo_type(AlgoType::None),
         algo_params(std::monostate{}), creation_timestamp_ns(ts),
         backend(nullptr) {
     static std::atomic<uint64_t> next_id{1};
@@ -250,17 +265,29 @@ inline MarketBoundOrder<MarketBackend> operator/(const Sell &s,
 }
 
 template <typename B>
-inline DetailedOrder<B> operator/(const MarketBoundOrder<B> &m, YES_t) {
-  DetailedOrder<B> o{
-      Order{m.market, m.quantity, m.is_buy, true, Price(0), m.timestamp_ns}};
+inline bop::DetailedOrder<B> operator/(const bop::MarketBoundOrder<B> &m, bop::YES_t) {
+  bop::DetailedOrder<B> o(bop::Order(m.market, m.quantity, m.is_buy, bop::OutcomeId(true), bop::Price(0), m.timestamp_ns));
   o.backend = m.backend;
   return o;
 }
 
 template <typename B>
-inline DetailedOrder<B> operator/(const MarketBoundOrder<B> &m, NO_t) {
-  DetailedOrder<B> o{
-      Order{m.market, m.quantity, m.is_buy, false, Price(0), m.timestamp_ns}};
+inline bop::DetailedOrder<B> operator/(const bop::MarketBoundOrder<B> &m, bop::NO_t) {
+  bop::DetailedOrder<B> o(bop::Order(m.market, m.quantity, m.is_buy, bop::OutcomeId(false), bop::Price(0), m.timestamp_ns));
+  o.backend = m.backend;
+  return o;
+}
+
+template <typename B>
+inline bop::DetailedOrder<B> operator/(const bop::MarketBoundOrder<B> &m, bop::Long_t) {
+  bop::DetailedOrder<B> o(bop::Order(m.market, m.quantity, m.is_buy, std::monostate{}, bop::Price(0), m.timestamp_ns));
+  o.backend = m.backend;
+  return o;
+}
+
+template <typename B>
+inline bop::DetailedOrder<B> operator/(const bop::MarketBoundOrder<B> &m, bop::OutcomeId outcome) {
+  bop::DetailedOrder<B> o(bop::Order(m.market, m.quantity, m.is_buy, outcome, bop::Price(0), m.timestamp_ns));
   o.backend = m.backend;
   return o;
 }
