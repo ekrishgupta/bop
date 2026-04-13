@@ -47,7 +47,11 @@ struct BacktestMarketBackend : public MarketBackend {
   void set_latency_model(LatencyModel model) { latency_model_ = model; }
   void set_slippage_model(SlippageModel model) { slippage_model_ = model; }
 
-  Price get_price(MarketId market, bool outcome_yes) const override {
+  Price get_price(MarketId market, OutcomeId outcome) const override {
+    bool outcome_yes = true;
+    if (std::holds_alternative<bool>(outcome)) {
+      outcome_yes = std::get<bool>(outcome);
+    }
     auto it = prices_.find(market.hash);
     if (it != prices_.end()) {
       return outcome_yes ? it->second.first : it->second.second;
@@ -55,8 +59,8 @@ struct BacktestMarketBackend : public MarketBackend {
     return Price(0);
   }
 
-  Price get_depth(MarketId market, bool is_bid) const override {
-    return get_price(market, is_bid);
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
+    return get_price(market, outcome);
   }
 
   Price get_balance() const override { return cached_balance_; }
@@ -123,7 +127,7 @@ struct BacktestMarketBackend : public MarketBackend {
         continue;
       }
 
-      Price current_price = get_price(order.market, order.outcome_yes);
+      Price current_price = get_price(order.market, order.outcome);
       if (current_price.raw == 0) {
         ++it;
         continue;
