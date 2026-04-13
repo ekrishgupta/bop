@@ -39,15 +39,22 @@ public:
   void set_engine(ExecutionEngine *engine) { engine_ = engine; }
 
   // Market Data (Live) - Now returns cached data with fallback
-  Price get_price(MarketId market, bool outcome_yes) const override {
+  Price get_price(MarketId market, OutcomeId outcome) const override {
+    bool is_yes = true;
+    if (std::holds_alternative<bool>(outcome)) {
+      is_yes = std::get<bool>(outcome);
+    } else if (std::holds_alternative<std::monostate>(outcome)) {
+      is_yes = true; // Default for equity/long
+    }
+
     {
       std::lock_guard<std::mutex> lock(cache_mutex_);
       auto it = price_cache_.find(market.hash);
       if (it != price_cache_.end()) {
-        return outcome_yes ? it->second.yes_price : it->second.no_price;
+        return is_yes ? it->second.yes_price : it->second.no_price;
       }
     }
-    return get_price_http(market, outcome_yes);
+    return get_price_http(market, outcome);
   }
 
   int64_t get_volume(MarketId market) const override {
@@ -62,7 +69,7 @@ public:
   }
 
   // Virtual fallbacks to be implemented by child or remain as defaults
-  virtual Price get_price_http(MarketId market, bool outcome_yes) const {
+  virtual Price get_price_http(MarketId market, OutcomeId outcome) const {
     return Price(0);
   }
 
