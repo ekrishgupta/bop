@@ -1,53 +1,63 @@
-# BOP: Binary Outcome Protocol
+# BOP: Generalized Outcome Protocol
 
-BOP is an embedded **Domain-Specific Language (DSL)** for prediction markets built on the **Binary Outcome Protocol**, natively integrated into C++17.
+BOP is an embedded **Domain-Specific Language (DSL)** for financial markets, natives integrated into C++20. 
 
-Unlike traditional trading libraries that rely on verbose API calls, BOP allows quantitative traders to express complex market logic, execution algorithms, and risk gates as readable C++ expressions. By treating binary outcomes (YES/NO) as first-class primitives, the language transforms standard code into an intuitive, pipeline-based strategy language.
+Originally built for prediction markets, BOP has evolved into a high-performance framework for expressing complex market logic, execution algorithms, and risk gates across **Binary Markets**, **Multi-Outcome (Categorical) Markets**, and **Traditional Equities**.
 
 ## The BOP Language
 
-The core philosophy of BOP is that **trading logic should read like a sentence**. By leveraging C++ operator overloading, BOP transforms standard code into a readable, pipeline-based strategy language.
+The core philosophy of BOP is that **trading logic should read like a sentence**. By leveraging C++20 operator overloading and concepts, BOP transforms standard code into a readable, pipeline-based strategy language.
 
 ### Core Syntax
-*   **Routing**: `/` (e.g., `Buy(100) / "BTC" / YES`)
+*   **Routing**: `/` (e.g., `Buy(100) / "BTC" / Outcome(YES)`)
 *   **Dispatch**: `>>` (e.g., `order >> LiveExchange`)
 *   **Conditional**: `When(...) >> Order(...)`
 *   **Modifiers**: `|` (e.g., `order | IOC | PostOnly`)
 *   **Brackets**: `&` (e.g., `order & TakeProfit(0.70) & StopLoss(0.40)`)
 
-### Example: A Persistent Arbitrage Strategy
+### Example: Multi-Exchange Universal Arbitrage
 ```cpp
-auto arb = When(Market("BTC", kalshi).Price(YES) < Market("BTC", polymarket).Price(YES))
-           >> (Buy(100_shares) / Market("BTC", kalshi) / YES + MarketPrice());
+// Queries the best price for BTC YES across all registered exchanges
+auto arb = When(UniversalMarket("BTC").Price(YES) < 0.45_usd)
+           >> (Buy(100_shares) / UniversalMarket("BTC") / YES);
 
 arb >> LiveExchange;
 ```
 
+## Features
+
+### 1. Unified Outcome Primitive
+BOP uses a generic `OutcomeId` variant capable of representing:
+- **Binary**: `YES` / `NO` (bool)
+- **Categorical**: Candidate names or positions (uint32_t / string)
+- **Equities**: Tickers and directions (string)
+
+### 2. Universal Market Routing
+Register "super-tickers" that span multiple exchanges. The engine automatically routes queries and orders to the best available liquidity provider.
+
+### 3. Native Backtesting
+Deterministic historical simulation with high-fidelity latency and slippage modeling. Transition from backtest to live trading by swapping `engine` targets.
+
 ## Repository Structure
 
-The project is organized into modular layers to separate the DSL aesthetics from the high-frequency execution core:
-
 *   **`core/`**: The heart of the framework.
-    *   `core.hpp`: Definition of the fundamental DSL atoms (`Order`, `Price`, `MarketId`).
-    *   `logic.hpp`: The "Grammar" of the DSL, containing `When`, `Position`, and logical operators.
-    *   `engine.hpp`: The execution core that manages multi-threaded state and risk gates.
-    *   `backtest.hpp`: Deterministic historical simulation engine with latency/slippage modeling.
-    *   `database.hpp`: Persistence layer for logging every fill, order, and PnL snapshot to SQLite.
-*   **`exchanges/`**: Concrete implementations of exchange backends (Kalshi, Polymarket, PredictIt, Betfair, Gnosis).
-*   **`include/` & `external/`**: Dependency management (nlohmann/json, simdjson).
-*   **`examples/`**: Ready-to-run strategy templates and backtesting demos.
+    *   `core.hpp`: Definition of the fundamental DSL atoms (`Order`, `OutcomeId`, `Price`).
+    *   `logic.hpp`: The "Grammar" of the DSL.
+    *   `engine.hpp`: The execution core and risk management system.
+    *   `backtest.hpp`: Deterministic simulation engine.
+*   **`exchanges/`**: Backend implementations (Kalshi, Polymarket, Betfair, Gnosis, PredictIt).
+*   **`examples/`**: Templates for arbitrage, market making, and proportional sizing.
 
 ## Performance & Safety
 
-BOP is built for the unique constraints of binary prediction markets:
-*   **Pre-Trade Risk**: Automatic kill-switches based on daily loss limits and fat-finger protection.
-*   **Low Latency**: Uses `simdjson` for high-speed WebSocket message parsing and a thread-safe lock-free command queue for order dispatch.
-*   **Persistence**: Built-in SQLite logging ensuring that strategy performance is audited and persisted across restarts.
+*   **Pre-Trade Risk**: Automatic kill-switches and fat-finger protection.
+*   **C++20 Zero-Cost Abstractions**: Leveraging concepts for compile-time validation of backend capabilities.
+*   **Persistence**: Integrated SQLite logging for audited execution history.
 
 ## Getting Started
 
 ### Prerequisites
-*   C++17 Compatible Compiler (Clang 10+, GCC 9+)
+*   C++20 Compatible Compiler (Clang 13+, GCC 11+)
 *   CMake 3.15+
 *   Dependencies: Boost, OpenSSL, CURL, SQLite3
 
