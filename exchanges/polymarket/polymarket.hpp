@@ -63,7 +63,11 @@ struct Polymarket : public StreamingMarketBackend {
     }
   }
 
-  std::string resolve_token_id(const MarketId &market, bool outcome_yes) const {
+  std::string resolve_token_id(const MarketId &market, OutcomeId outcome) const {
+    bool outcome_yes = true;
+    if (std::holds_alternative<bool>(outcome)) {
+      outcome_yes = std::get<bool>(outcome);
+    }
     std::string key = market.ticker + (outcome_yes ? "_YES" : "_NO");
     auto it = ticker_to_id.find(key);
     if (it != ticker_to_id.end()) {
@@ -76,8 +80,8 @@ struct Polymarket : public StreamingMarketBackend {
   int64_t clob_get_server_time() const override { return 1709400000; }
 
   // --- Market Data (Live) ---
-  Price get_price_http(MarketId market, bool outcome_yes) const override {
-    std::string token_id = resolve_token_id(market, outcome_yes);
+  Price get_price_http(MarketId market, OutcomeId outcome) const override {
+    std::string token_id = resolve_token_id(market, outcome);
     std::string url =
         std::string("https://clob.polymarket.com/last-trade-price?token_id=") +
         token_id;
@@ -125,7 +129,7 @@ struct Polymarket : public StreamingMarketBackend {
     return {};
   }
 
-  Price get_depth(MarketId, bool) const override {
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
     return Price::from_cents(5);
   }
 
@@ -139,8 +143,8 @@ struct Polymarket : public StreamingMarketBackend {
     json j;
     j["type"] = "subscribe";
     // Subscribe to both YES and NO tokens for the market
-    j["token_ids"] = {resolve_token_id(market, true),
-                      resolve_token_id(market, false)};
+    j["token_ids"] = {resolve_token_id(market, Outcome(true)),
+                      resolve_token_id(market, Outcome(false))};
     j["channels"] = {"trades", "book"};
     ws_->send(j.dump());
   }
@@ -281,7 +285,7 @@ struct Polymarket : public StreamingMarketBackend {
     std::string url = "https://clob.polymarket.com" + path;
 
     json j;
-    j["token_id"] = resolve_token_id(o.market, o.outcome_yes);
+    j["token_id"] = resolve_token_id(o.market, o.outcome);
     j["price"] = o.price.to_usd_string();
     j["size"] = std::to_string(o.quantity.raw);
     j["side"] = o.is_buy ? "BUY" : "SELL";
