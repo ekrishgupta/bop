@@ -22,7 +22,12 @@
 
 namespace bop {
 
-template <typename Tag> struct SyntheticMarketQuery;
+struct MarketBackend;
+struct ExecutionEngine;
+struct OCOOrder;
+void operator>>(const struct Order &o, ExecutionEngine &engine);
+void operator>>(const std::vector<struct Order> &batch, ExecutionEngine &engine);
+void operator>>(const struct OCOOrder &oco, ExecutionEngine &engine);
 
 struct Command {
   enum class Type {
@@ -190,6 +195,13 @@ struct ExecutionEngine {
     return true;
   }
 
+  Price calculate_position_value(MarketId market, OutcomeId outcome, Shares qty) const {
+    Price p = get_price(market, outcome);
+    if (p.raw == 0)
+      return Price(0);
+    return Price(qty.raw * p.raw);
+  }
+
   Shares calculate_dynamic_size(const Order &o) const {
     if (!limits.dynamic_sizing_enabled)
       return o.quantity;
@@ -199,7 +211,7 @@ struct ExecutionEngine {
       return Shares(limits.min_order_quantity);
 
     double risk_amount = equity.to_double() * limits.risk_per_trade_percent;
-    Price p = (o.price.raw > 0) ? o.price : get_price(o.market, o.outcome_yes);
+    Price p = (o.price.raw > 0) ? o.price : get_price(o.market, o.outcome);
     if (p.raw == 0)
       p = Price::from_usd(0.5);
 
@@ -270,10 +282,13 @@ struct ExecutionEngine {
     Price balance = get_balance();
     if (balance.raw > 0) {
       Price exposure = get_exposure();
-      double leverage = exposure.to_double() / balance.to_double();
+      // Calculate incremental exposure for this order
+      Price incremental_exposure = calculate_position_value(o.market, o.outcome, o.quantity);
+      double total_exposure_val = (exposure + incremental_exposure).to_double();
+      double leverage = total_exposure_val / balance.to_double();
       if (leverage > limits.max_leverage) {
         std::cerr << "[RISK] REJECT: Portfolio leverage too high: " << leverage
-                  << std::endl;
+                  << " (Limit: " << limits.max_leverage << ")" << std::endl;
         return false;
       }
     }
@@ -299,7 +314,7 @@ struct ExecutionEngine {
 
     // 3. Fat-Finger Price Protection
     if (o.price.raw > 0) {
-      Price bbo = get_price(o.market, o.outcome_yes);
+      Price bbo = get_price(o.market, o.outcome);
       if (bbo.raw > 0) {
         double deviation = std::abs((double)o.price.raw - bbo.raw) / bbo.raw;
         if (deviation > limits.fat_finger_threshold) {
@@ -467,25 +482,26 @@ struct ExecutionEngine {
 
   virtual Price get_pnl() const { return Price(0); }
 
-  virtual Price get_depth(MarketId market, bool is_bid) const {
+  virtual Price get_depth(MarketId market, OutcomeId outcome) const {
     for (auto b : backends_) {
-      Price p = b->get_depth(market, is_bid);
+      Price p = b->get_depth(market, outcome);
       if (p.raw > 0)
         return p;
     }
     return Price(0);
   }
 
-  virtual Price get_universal_depth(MarketId super_ticker, bool is_bid) const {
+  virtual Price get_universal_depth(MarketId super_ticker, OutcomeId outcome) const {
     const auto *super = MarketRegistry::Get(super_ticker.ticker);
     if (!super)
-      return get_depth(super_ticker, is_bid);
+      return get_depth(super_ticker, outcome);
 
     Price best_price(0);
     for (const auto &entry : super->entries) {
-      Price p = entry.backend->get_depth(entry.market, is_bid);
+      Price p = entry.backend->get_depth(entry.market, outcome);
       if (p.raw > 0) {
-        if (best_price.raw == 0 || (is_bid ? p > best_price : p < best_price)) {
+        // Find best price (simplified: assuming bid/ask context is handled by outcome)
+        if (best_price.raw == 0 || p < best_price) {
           best_price = p;
         }
       }
@@ -493,9 +509,9 @@ struct ExecutionEngine {
     return best_price;
   }
 
-  virtual Price get_price(MarketId market, bool outcome_yes) const {
+  virtual Price get_price(MarketId market, OutcomeId outcome) const {
     for (auto b : backends_) {
-      Price p = b->get_price(market, outcome_yes);
+      Price p = b->get_price(market, outcome);
       if (p.raw > 0)
         return p;
     }
@@ -503,17 +519,16 @@ struct ExecutionEngine {
   }
 
   virtual Price get_universal_price(MarketId super_ticker,
-                                    bool outcome_yes) const {
+                                    OutcomeId outcome) const {
     const auto *super = MarketRegistry::Get(super_ticker.ticker);
     if (!super)
-      return get_price(super_ticker, outcome_yes);
+      return get_price(super_ticker, outcome);
 
     Price best_price(0);
     for (const auto &entry : super->entries) {
-      Price p = entry.backend->get_price(entry.market, outcome_yes);
+      Price p = entry.backend->get_price(entry.market, outcome);
       if (p.raw > 0) {
-        // For universal pricing, we return the "best" price (lowest for buying
-        // YES)
+        // For universal pricing, we return the "best" price (lowest for buying)
         if (best_price.raw == 0 || p < best_price) {
           best_price = p;
         }
@@ -576,12 +591,12 @@ namespace bop {
 template <typename Tag> inline bool RelativeCondition<Tag>::eval() const {
   if constexpr (std::is_same_v<Tag, PriceTag>) {
     Price l_val = left.backend
-                      ? left.backend->get_price(left.market, left.outcome_yes)
-                      : LiveExchange.get_price(left.market, left.outcome_yes);
+                      ? left.backend->get_price(left.market, left.outcome)
+                      : LiveExchange.get_price(left.market, left.outcome);
     Price r_val =
         right.backend
-            ? right.backend->get_price(right.market, right.outcome_yes)
-            : LiveExchange.get_price(right.market, right.outcome_yes);
+            ? right.backend->get_price(right.market, right.outcome)
+            : LiveExchange.get_price(right.market, right.outcome);
     return is_greater ? l_val > r_val : l_val < r_val;
   } else {
     return false;
@@ -593,9 +608,9 @@ inline double get_query_value(const MarketQuery<Tag> &q) {
   if constexpr (std::is_same_v<Tag, PriceTag>) {
     Price val =
         q.is_universal
-            ? LiveExchange.get_universal_price(q.market, q.outcome_yes)
-            : (q.backend ? q.backend->get_price(q.market, q.outcome_yes)
-                         : LiveExchange.get_price(q.market, q.outcome_yes));
+            ? LiveExchange.get_universal_price(q.market, q.outcome)
+            : (q.backend ? q.backend->get_price(q.market, q.outcome)
+                         : LiveExchange.get_price(q.market, q.outcome));
     return val.to_double();
   } else if constexpr (std::is_same_v<Tag, VolumeTag>) {
     return static_cast<double>(LiveExchange.get_volume(q.market).raw);
@@ -646,22 +661,22 @@ inline bool Condition<Tag, Q>::eval() const {
       Price p =
           query.is_universal
               ? LiveExchange.get_universal_price(query.market,
-                                                 query.outcome_yes)
+                                                 query.outcome)
               : (query.backend
-                     ? query.backend->get_price(query.market, query.outcome_yes)
-                     : LiveExchange.get_price(query.market, query.outcome_yes));
+                     ? query.backend->get_price(query.market, query.outcome)
+                     : LiveExchange.get_price(query.market, query.outcome));
       val = static_cast<double>(p.raw);
     } else if constexpr (std::is_same_v<Tag, VolumeTag>) {
       val = static_cast<double>(LiveExchange.get_volume(query.market).raw);
     } else if constexpr (std::is_same_v<Tag, DepthTag>) {
       val = (double)(query.is_universal
                          ? LiveExchange.get_universal_depth(query.market,
-                                                            query.outcome_yes)
+                                                            query.outcome)
                          : (query.backend
                                 ? query.backend->get_depth(query.market,
-                                                           query.outcome_yes)
+                                                           query.outcome)
                                 : LiveExchange.get_depth(query.market,
-                                                         query.outcome_yes)))
+                                                         query.outcome)))
                 .raw;
     } else if constexpr (std::is_same_v<Tag, MidpointTag>) {
       Price mid(0);
@@ -710,17 +725,22 @@ public:
   PersistentConditionalStrategy(const bop::ConditionalOrder<T> &order)
       : co(order) {}
   bool tick(ExecutionEngine &engine) override { return tick_impl(engine); }
-  bool tick_impl(ExecutionEngine &engine);
+  bool tick_impl(bop::ExecutionEngine &engine);
 
-  void on_market_event_impl(ExecutionEngine &, MarketId, Price, int64_t) {}
-  void on_execution_event_impl(ExecutionEngine &, const std::string &,
-                               OrderStatus) {}
+  void on_market_event_impl(bop::ExecutionEngine &, bop::MarketId, bop::Price, int64_t) {}
+  void on_execution_event_impl(bop::ExecutionEngine &, const std::string &,
+                               bop::OrderStatus) {}
 };
 
 template <typename T>
 inline bool
-PersistentConditionalStrategy<T>::tick_impl(ExecutionEngine &engine) {
-  if constexpr (std::is_base_of_v<Trigger, T>) {
+PersistentConditionalStrategy<T>::tick_impl(bop::ExecutionEngine &engine) {
+  if constexpr (std::is_convertible_v<T, std::shared_ptr<bop::Trigger>>) {
+    if (co.condition->evaluate(engine)) {
+      co.order >> engine;
+      return !co.condition->is_recurring();
+    }
+  } else if constexpr (std::is_base_of_v<bop::Trigger, T>) {
     if (co.condition.evaluate(engine)) {
       co.order >> engine;
       return !co.condition.is_recurring();
@@ -802,10 +822,7 @@ inline void operator>>(WorkflowStep step, ExecutionEngine &engine) {
   GlobalAlgoManager.create_strategy<PersistentStrategy>(std::move(step));
 }
 
-// Forward declare restored Operators
-void operator>>(const Order &o, ExecutionEngine &engine);
-void operator>>(const std::vector<Order> &batch, ExecutionEngine &engine);
-void operator>>(const OCOOrder &oco, ExecutionEngine &engine);
+// (Operators moved up)
 
 template <typename B>
 inline Order operator>>(MarketBoundQuote<B> q, ExecutionEngine &engine) {
