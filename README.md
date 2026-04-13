@@ -45,7 +45,7 @@ Deterministic historical simulation with high-fidelity latency and slippage mode
     *   `logic.hpp`: The "Grammar" of the DSL.
     *   `engine.hpp`: The execution core and risk management system.
     *   `backtest.hpp`: Deterministic simulation engine.
-*   **`exchanges/`**: Backend implementations (Kalshi, Polymarket, Betfair, Gnosis, PredictIt).
+*   **`exchanges/`**: Backend implementations (Kalshi, Polymarket).
 *   **`examples/`**: Templates for arbitrage, market making, and proportional sizing.
 
 ## Performance & Safety

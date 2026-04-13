@@ -1,10 +1,7 @@
 #include "bop.hpp"
 #include "core/algo.hpp"
-#include "exchanges/betfair/betfair.hpp"
-#include "exchanges/gnosis/gnosis.hpp"
 #include "exchanges/kalshi/kalshi.hpp"
 #include "exchanges/polymarket/polymarket.hpp"
-#include "exchanges/predictit/predictit.hpp"
 #include <iostream>
 #include <variant>
 #include <thread>
@@ -378,9 +375,6 @@ int main() {
   // 2. Register backends with the Execution Engine
   RealLiveExchange.register_backend(&kalshi);
   RealLiveExchange.register_backend(&polymarket);
-  RealLiveExchange.register_backend(&predictit);
-  RealLiveExchange.register_backend(&betfair);
-  RealLiveExchange.register_backend(&gnosis);
 
   // Configure Risk Management
   RealLiveExchange.limits.max_position_size = 5000;
@@ -428,10 +422,6 @@ int main() {
                     LimitPrice(Price::from_usd(100.0)); // Way above market
   fat_finger >> LiveExchange;
 
-  // Strategy F: PredictIt Cross-Market Strategy
-  auto pi_strategy = When(Market("WH_Win", predictit).Price(YES) > 55_ticks) >>
-                     (Sell(100) / Market("WH_Win", predictit) / YES);
-  pi_strategy >> LiveExchange;
 
   std::cout << "[MAIN] Engine running with " << GlobalAlgoManager.active_count()
             << " active strategies/algorithms." << std::endl;
