@@ -11,10 +11,10 @@ struct MockBackend : public MarketBackend {
   Price current_price;
   MockBackend(std::string name) : name_str(name), current_price(0.60_usd) {}
   std::string name() const override { return name_str; }
-  Price get_price(MarketId market, bool outcome_yes) const override {
+  Price get_price(MarketId market, OutcomeId outcome) const override {
     return current_price;
   }
-  Price get_depth(MarketId market, bool is_bid) const override {
+  Price get_depth(MarketId market, OutcomeId outcome) const override {
     return current_price;
   }
   std::string create_order(const Order &o) const override {
@@ -45,7 +45,7 @@ int main() {
   kalshi.current_price = 0.45_usd;
 
   // 3. Query universal price (should find the best/lowest price for YES)
-  Price best_btc = LiveExchange.get_universal_price(MarketId("BTC"), true);
+  Price best_btc = LiveExchange.get_universal_price(MarketId("BTC"), Outcome(true));
   std::cout << "[INFO] Best Universal Price for BTC: " << best_btc << std::endl;
 
   // 4. Use the DSL with UniversalMarket

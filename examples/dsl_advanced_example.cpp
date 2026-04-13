@@ -10,8 +10,8 @@ struct MockBackend : public MarketBackend {
   Price p;
   MockBackend() : p(0.50_usd) {}
   std::string name() const override { return "Mock"; }
-  Price get_price(MarketId, bool) const override { return p; }
-  Price get_depth(MarketId, bool) const override { return p; }
+  Price get_price(MarketId, OutcomeId) const override { return p; }
+  Price get_depth(MarketId, OutcomeId) const override { return p; }
   std::string create_order(const Order &o) const override {
     std::cout << "[MOCK] Executing " << (o.is_buy ? "BUY" : "SELL") << " "
               << o.quantity << " shares" << std::endl;
